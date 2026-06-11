@@ -19,6 +19,7 @@ export function generateDockerCompose(store: ProfileStore): string {
       - PGID=1000
       - TZ=Asia/Jakarta
       - PASSWORD=${profile.password}
+      - DEFAULT_WORKSPACE=/projects
     volumes:
       - /home/ade/projects/${profile.name}:/projects
       - ./config-${profile.name}:/config
