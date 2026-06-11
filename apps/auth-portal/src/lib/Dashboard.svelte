@@ -137,9 +137,11 @@
     setTimeout(() => { message = ""; }, 5000);
   }
 
-  function openIDE(port: number) {
-    const host = window.location.hostname;
-    window.open(`http://${host}:${port}/`, "_blank");
+  function openIDE(profileName: string) {
+    // Encode admin credentials as base64 token
+    const token = btoa(`${adminName}:${adminPassword}`);
+    const url = `${window.location.origin}/api/open-ide?name=${encodeURIComponent(profileName)}&token=${encodeURIComponent(token)}`;
+    window.open(url, "_blank");
   }
 
   function getInitial(name: string): string {
@@ -399,7 +401,7 @@
 
             <!-- Open IDE Button -->
             <button
-              on:click={() => openIDE(profile.port)}
+              on:click={() => openIDE(profile.name)}
               class="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/10 hover:shadow-blue-500/25 flex items-center justify-center gap-2 group-hover:shadow-blue-500/20"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -94,8 +94,9 @@
         if (sessionRole === "admin") {
           loggedIn = true;
         } else {
-          const host = window.location.hostname;
-          window.location.href = `http://${host}:${sessionPort}/`;
+          // Developer → proxy login to code-server (auto-bypass password)
+          const token = btoa(`${sessionName}:${sessionPassword}`);
+          window.location.href = `${window.location.origin}/api/open-ide?name=${encodeURIComponent(sessionName)}&token=${encodeURIComponent(token)}`;
         }
       } else {
         errorMsg = result.error || "Login gagal";

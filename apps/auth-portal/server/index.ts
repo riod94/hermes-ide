@@ -2,6 +2,7 @@ import { join } from "path";
 import { handleAuth } from "./routes/auth";
 import { handleProfiles, handleProfileNames } from "./routes/profiles";
 import { handleDeploy } from "./routes/deploy";
+import { handleOpenIDE } from "./routes/open-ide";
 
 const STATIC_DIR = join(import.meta.dir, "../dist");
 const PORT = 51000;
@@ -93,6 +94,10 @@ const server = Bun.serve({
       const res = await handleDeploy(req);
       res.headers.set("Access-Control-Allow-Origin", "*");
       return res;
+    }
+
+    if (pathname === "/api/open-ide") {
+      return await handleOpenIDE(req);
     }
 
     // Static files (Svelte build output)
