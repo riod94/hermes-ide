@@ -1,0 +1,20 @@
+(node:212) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda_bg.wasm
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda.js
+[node.js fs] readdir with filetypes failed with error:  Error: EACCES: permission denied, scandir '/root/'
+    at async Object.readdir (node:internal/fs/promises:956:18)
+    at async z5 (file:///app/code-server/lib/vscode/out/server-main.js:431:96527)
+    at async eD (file:///app/code-server/lib/vscode/out/server-main.js:431:96456)
+    at async Object.Yg (file:///app/code-server/lib/vscode/out/server-main.js:431:96322)
+    at async o.readdir (file:///app/code-server/lib/vscode/out/server-main.js:471:19827) {
+  errno: -13,
+  code: 'EACCES',
+  syscall: 'scandir',
+  path: '/root/'
+}
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda.js
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda_bg.wasm
+[2026-06-11T08:29:03.455Z] error Failed to get latest version [38;2;140;140;140m{"error":"read ECONNRESET"}[0m
+a socket was left hanging
+a socket was left hanging

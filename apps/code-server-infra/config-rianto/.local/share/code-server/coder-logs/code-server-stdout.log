@@ -18,3 +18,15 @@
 [15:25:34] Completed initializing default profile extensions in extensions installation folder. file:///config/extensions
 [15:25:36] [203.83.39.26][1c877780][ManagementConnection] New connection established.
 [15:25:38] [203.83.39.99][954ec264][ExtensionHostConnection] New connection established.
+[15:25:38] [203.83.39.99][954ec264][ExtensionHostConnection] <941> Launched Extension Host Process.
+[15:25:39] [203.83.39.99][954ec264][ExtensionHostConnection] <941> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+[15:25:39] [203.83.39.26][1c877780][ManagementConnection] The client has disconnected gracefully, so the connection will be disposed.
+[2026-06-11T08:32:14.412Z] info  code-server 4.123.0 77d880d0c3fcbf4ac613644b3e113cedd6173a16
+[2026-06-11T08:32:14.414Z] info  Using user-data-dir /config/data
+[2026-06-11T08:32:14.441Z] info  Using config file /config/.config/code-server/config.yaml
+[2026-06-11T08:32:14.441Z] info  HTTP server listening on http://0.0.0.0:8443/
+[2026-06-11T08:32:14.441Z] info    - Authentication is enabled
+[2026-06-11T08:32:14.442Z] info      - Using password from $PASSWORD
+[2026-06-11T08:32:14.442Z] info    - Not serving HTTPS
+[2026-06-11T08:32:14.442Z] info  Session server listening on /config/data/code-server-ipc.sock

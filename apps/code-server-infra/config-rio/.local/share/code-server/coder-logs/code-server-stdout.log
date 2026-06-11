@@ -6,3 +6,35 @@
 [2026-06-11T08:25:27.012Z] info      - Using password from $PASSWORD
 [2026-06-11T08:25:27.012Z] info    - Not serving HTTPS
 [2026-06-11T08:25:27.012Z] info  Session server listening on /config/data/code-server-ipc.sock
+[15:26:37] 
+
+
+
+
+[reconnection-grace-time] No CLI argument provided, using default: 10800000ms (10800s)
+[15:26:37] [AgentHostChannel] Registered unavailable IPC channel 'agentHostProxy': no --agent-host-bridge-port / --agent-host-bridge-path set.
+[15:26:37] Extension host agent started.
+[15:26:37] Started initializing default profile extensions in extensions installation folder. file:///config/extensions
+[15:26:37] Completed initializing default profile extensions in extensions installation folder. file:///config/extensions
+[15:26:40] [203.83.39.63][6cf20f1f][ManagementConnection] New connection established.
+[15:26:42] [203.83.39.67][fc115cfd][ExtensionHostConnection] New connection established.
+[15:26:42] [203.83.39.67][fc115cfd][ExtensionHostConnection] <1144> Launched Extension Host Process.
+[15:26:42] [203.83.39.67][fc115cfd][ExtensionHostConnection] <1144> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+[15:27:27] [203.83.39.63][6cf20f1f][ManagementConnection] The client has disconnected gracefully, so the connection will be disposed.
+[15:27:27] [203.83.39.67][fc115cfd][ExtensionHostConnection] <1144> Extension Host Process exited with code: 0, signal: null.
+[15:27:29] [203.83.39.63][adba6205][ManagementConnection] New connection established.
+[15:27:30] [203.83.39.63][b9e44c3c][ExtensionHostConnection] New connection established.
+[15:27:30] [203.83.39.63][b9e44c3c][ExtensionHostConnection] <2029> Launched Extension Host Process.
+[15:27:31] [203.83.39.63][b9e44c3c][ExtensionHostConnection] <2029> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+[15:27:50] [203.83.39.63][adba6205][ManagementConnection] The client has disconnected gracefully, so the connection will be disposed.
+[15:27:50] [203.83.39.63][b9e44c3c][ExtensionHostConnection] <2029> Extension Host Process exited with code: 0, signal: null.
+[2026-06-11T08:32:14.253Z] info  code-server 4.123.0 77d880d0c3fcbf4ac613644b3e113cedd6173a16
+[2026-06-11T08:32:14.257Z] info  Using user-data-dir /config/data
+[2026-06-11T08:32:14.291Z] info  Using config file /config/.config/code-server/config.yaml
+[2026-06-11T08:32:14.291Z] info  HTTP server listening on http://0.0.0.0:8443/
+[2026-06-11T08:32:14.291Z] info    - Authentication is enabled
+[2026-06-11T08:32:14.291Z] info      - Using password from $PASSWORD
+[2026-06-11T08:32:14.291Z] info    - Not serving HTTPS
+[2026-06-11T08:32:14.292Z] info  Session server listening on /config/data/code-server-ipc.sock

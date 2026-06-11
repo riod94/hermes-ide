@@ -6,3 +6,11 @@
 [2026-06-11T08:25:26.884Z] info      - Using password from $PASSWORD
 [2026-06-11T08:25:26.884Z] info    - Not serving HTTPS
 [2026-06-11T08:25:26.884Z] info  Session server listening on /config/data/code-server-ipc.sock
+[2026-06-11T08:32:14.344Z] info  code-server 4.123.0 77d880d0c3fcbf4ac613644b3e113cedd6173a16
+[2026-06-11T08:32:14.348Z] info  Using user-data-dir /config/data
+[2026-06-11T08:32:14.375Z] info  Using config file /config/.config/code-server/config.yaml
+[2026-06-11T08:32:14.375Z] info  HTTP server listening on http://0.0.0.0:8443/
+[2026-06-11T08:32:14.375Z] info    - Authentication is enabled
+[2026-06-11T08:32:14.375Z] info      - Using password from $PASSWORD
+[2026-06-11T08:32:14.375Z] info    - Not serving HTTPS
+[2026-06-11T08:32:14.375Z] info  Session server listening on /config/data/code-server-ipc.sock

@@ -6,3 +6,28 @@
 [2026-06-11T08:25:26.822Z] info      - Using password from $PASSWORD
 [2026-06-11T08:25:26.822Z] info    - Not serving HTTPS
 [2026-06-11T08:25:26.822Z] info  Session server listening on /config/data/code-server-ipc.sock
+[15:31:26] 
+
+
+
+
+[reconnection-grace-time] No CLI argument provided, using default: 10800000ms (10800s)
+[15:31:26] [AgentHostChannel] Registered unavailable IPC channel 'agentHostProxy': no --agent-host-bridge-port / --agent-host-bridge-path set.
+[15:31:26] Extension host agent started.
+[15:31:27] Started initializing default profile extensions in extensions installation folder. file:///config/extensions
+[15:31:27] Completed initializing default profile extensions in extensions installation folder. file:///config/extensions
+[15:31:30] [203.83.39.26][adfac054][ManagementConnection] New connection established.
+[15:31:31] [203.83.39.26][c46c262c][ExtensionHostConnection] New connection established.
+[15:31:32] [203.83.39.26][c46c262c][ExtensionHostConnection] <1133> Launched Extension Host Process.
+[15:31:32] [203.83.39.26][c46c262c][ExtensionHostConnection] <1133> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+[15:31:52] [203.83.39.26][adfac054][ManagementConnection] The client has disconnected gracefully, so the connection will be disposed.
+[15:31:52] [203.83.39.26][c46c262c][ExtensionHostConnection] <1133> Extension Host Process exited with code: 0, signal: null.
+[2026-06-11T08:32:14.701Z] info  code-server 4.123.0 77d880d0c3fcbf4ac613644b3e113cedd6173a16
+[2026-06-11T08:32:14.703Z] info  Using user-data-dir /config/data
+[2026-06-11T08:32:14.727Z] info  Using config file /config/.config/code-server/config.yaml
+[2026-06-11T08:32:14.727Z] info  HTTP server listening on http://0.0.0.0:8443/
+[2026-06-11T08:32:14.728Z] info    - Authentication is enabled
+[2026-06-11T08:32:14.728Z] info      - Using password from $PASSWORD
+[2026-06-11T08:32:14.728Z] info    - Not serving HTTPS
+[2026-06-11T08:32:14.728Z] info  Session server listening on /config/data/code-server-ipc.sock

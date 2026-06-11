@@ -1,0 +1,47 @@
+[2026-06-11T08:25:27.226Z] info  code-server 4.123.0 77d880d0c3fcbf4ac613644b3e113cedd6173a16
+[2026-06-11T08:25:27.227Z] info  Using user-data-dir /config/data
+[2026-06-11T08:25:27.248Z] info  Using config file /config/.config/code-server/config.yaml
+[2026-06-11T08:25:27.248Z] info  HTTP server listening on http://0.0.0.0:8443/
+[2026-06-11T08:25:27.249Z] info    - Authentication is enabled
+[2026-06-11T08:25:27.249Z] info      - Using password from $PASSWORD
+[2026-06-11T08:25:27.249Z] info    - Not serving HTTPS
+[2026-06-11T08:25:27.249Z] info  Session server listening on /config/data/code-server-ipc.sock
+[15:27:55] 
+
+
+
+
+[reconnection-grace-time] No CLI argument provided, using default: 10800000ms (10800s)
+[15:27:55] [AgentHostChannel] Registered unavailable IPC channel 'agentHostProxy': no --agent-host-bridge-port / --agent-host-bridge-path set.
+[15:27:55] Extension host agent started.
+[15:27:55] Started initializing default profile extensions in extensions installation folder. file:///config/extensions
+[15:27:55] Completed initializing default profile extensions in extensions installation folder. file:///config/extensions
+[15:27:57] [203.83.39.99][e64e687b][ManagementConnection] New connection established.
+[15:27:59] [203.83.39.26][d75d801b][ExtensionHostConnection] New connection established.
+[15:27:59] [203.83.39.26][d75d801b][ExtensionHostConnection] <751> Launched Extension Host Process.
+[15:27:59] [203.83.39.26][d75d801b][ExtensionHostConnection] <751> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+[15:28:05] [203.83.39.99][e64e687b][ManagementConnection] The client has disconnected gracefully, so the connection will be disposed.
+[15:28:05] [203.83.39.26][d75d801b][ExtensionHostConnection] <751> Extension Host Process exited with code: 0, signal: null.
+[15:28:06] [203.83.39.67][7e31012d][ManagementConnection] New connection established.
+[15:28:07] [203.83.39.63][4b7ed3c6][ExtensionHostConnection] New connection established.
+[15:28:07] [203.83.39.63][4b7ed3c6][ExtensionHostConnection] <1535> Launched Extension Host Process.
+[15:28:08] [203.83.39.63][4b7ed3c6][ExtensionHostConnection] <1535> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+[15:28:28] [203.83.39.67][7e31012d][ManagementConnection] The client has disconnected gracefully, so the connection will be disposed.
+[15:28:28] [203.83.39.63][4b7ed3c6][ExtensionHostConnection] <1535> Extension Host Process exited with code: 0, signal: null.
+[15:28:30] [203.83.39.26][f8c55d0a][ManagementConnection] New connection established.
+[15:28:31] [203.83.39.63][159b268d][ExtensionHostConnection] New connection established.
+[15:28:31] [203.83.39.63][159b268d][ExtensionHostConnection] <2013> Launched Extension Host Process.
+[15:28:31] [203.83.39.63][159b268d][ExtensionHostConnection] <2013> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+[15:31:24] [203.83.39.26][f8c55d0a][ManagementConnection] The client has disconnected gracefully, so the connection will be disposed.
+[15:31:24] [203.83.39.63][159b268d][ExtensionHostConnection] <2013> Extension Host Process exited with code: 0, signal: null.
+[2026-06-11T08:32:13.854Z] info  code-server 4.123.0 77d880d0c3fcbf4ac613644b3e113cedd6173a16
+[2026-06-11T08:32:13.856Z] info  Using user-data-dir /config/data
+[2026-06-11T08:32:13.888Z] info  Using config file /config/.config/code-server/config.yaml
+[2026-06-11T08:32:13.889Z] info  HTTP server listening on http://0.0.0.0:8443/
+[2026-06-11T08:32:13.889Z] info    - Authentication is enabled
+[2026-06-11T08:32:13.889Z] info      - Using password from $PASSWORD
+[2026-06-11T08:32:13.892Z] info    - Not serving HTTPS
+[2026-06-11T08:32:13.892Z] info  Session server listening on /config/data/code-server-ipc.sock

@@ -1,0 +1,12 @@
+(node:212) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda.js
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda_bg.wasm
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda.js
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda_bg.wasm
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda.js
+File not found: /app/code-server/lib/vscode/node_modules/vsda/rust/web/vsda_bg.wasm
+[2026-06-11T08:30:35.278Z] error Failed to get latest version [38;2;140;140;140m{"error":"read ECONNRESET"}[0m
+a socket was left hanging
+a socket was left hanging
+a socket was left hanging
