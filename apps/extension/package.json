@@ -1,0 +1,57 @@
+{
+  "name": "hermes-ide",
+  "displayName": "Hermes IDE",
+  "description": "Agentic Browser IDE extension for Hermes AI",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:hermes.chatView"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hermes-sidebar",
+          "title": "Hermes IDE",
+          "icon": "$(zap)"
+        }
+      ]
+    },
+    "views": {
+      "hermes-sidebar": [
+        {
+          "type": "webview",
+          "id": "hermes.chatView",
+          "name": "Chat",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "hermes.focus",
+        "title": "Hermes: Focus Chat",
+        "category": "Hermes"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "bun run esbuild-base --minify",
+    "compile": "bun run esbuild-base --sourcemap",
+    "watch": "bun run esbuild-base --sourcemap --watch",
+    "esbuild-base": "node esbuild.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "20.x",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  }
+}
