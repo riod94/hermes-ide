@@ -1,5 +1,4 @@
 import { join } from "path";
-import { existsSync } from "fs";
 import { handleAuth } from "./routes/auth";
 import { handleProfiles } from "./routes/profiles";
 import { handleDeploy } from "./routes/deploy";
@@ -28,16 +27,28 @@ function getMime(path: string): string {
 async function serveStatic(pathname: string): Promise<Response | null> {
   let filePath = join(STATIC_DIR, pathname);
 
-  // SPA fallback: if file doesn't exist, serve index.html
-  if (!existsSync(filePath)) {
+  // If path is "/" or directory, serve index.html
+  if (pathname === "/" || pathname.endsWith("/")) {
     filePath = join(STATIC_DIR, "index.html");
-    if (!existsSync(filePath)) return null;
   }
 
+  // Check if file exists
   const file = Bun.file(filePath);
-  return new Response(file, {
-    headers: { "Content-Type": getMime(filePath) },
-  });
+  if (await file.exists()) {
+    return new Response(file, {
+      headers: { "Content-Type": getMime(filePath) },
+    });
+  }
+
+  // SPA fallback: serve index.html for non-file routes
+  const indexFile = Bun.file(join(STATIC_DIR, "index.html"));
+  if (await indexFile.exists()) {
+    return new Response(indexFile, {
+      headers: { "Content-Type": "text/html" },
+    });
+  }
+
+  return null;
 }
 
 const server = Bun.serve({
