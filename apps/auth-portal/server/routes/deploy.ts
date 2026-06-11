@@ -5,7 +5,8 @@ function authenticate(req: Request): { authorized: boolean; role?: string } {
   const auth = req.headers.get("x-auth");
   if (!auth) return { authorized: false };
 
-  const [name, password] = auth.split(":");
+  const [name, ...rest] = auth.split(":");
+  const password = rest.join(":");
   const store = loadStore();
   const profile = store.profiles.find((p) => p.name === name && p.password === password);
   if (!profile) return { authorized: false };

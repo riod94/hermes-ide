@@ -7,6 +7,8 @@ import {
   updateRole,
   type ProfileStore,
 } from "../lib/store";
+import { writeDockerCompose, restartContainer } from "../lib/docker";
+import { sendDiscordNotification } from "../lib/discord";
 
 function isAdmin(role: string): boolean {
   return role === "admin";
@@ -66,6 +68,11 @@ export async function handleProfiles(req: Request): Promise<Response> {
       store = addProfile(store, name.toLowerCase(), password, (role as any) || "developer");
       saveStore(store);
 
+      writeDockerCompose(store);
+      await restartContainer(`hermes-ide-${name.toLowerCase()}`);
+      
+      await sendDiscordNotification(`✅ **New Hermes IDE Profile Created**\n👤 User: \`${name.toLowerCase()}\`\n🔑 Role: \`${role || "developer"}\`\n🛠️ Container: \`hermes-ide-${name.toLowerCase()}\` is deploying...`);
+
       return Response.json({ success: true, message: `Profile '${name}' added`, profiles: store.profiles.map((p) => ({ name: p.name, role: p.role, port: p.port })) });
     } catch (e: any) {
       return Response.json({ error: e.message }, { status: 400 });
@@ -85,6 +92,11 @@ export async function handleProfiles(req: Request): Promise<Response> {
       let store = loadStore();
       store = updatePassword(store, name, password);
       saveStore(store);
+
+      writeDockerCompose(store);
+      await restartContainer(`hermes-ide-${name.toLowerCase()}`);
+      
+      await sendDiscordNotification(`🔑 **Hermes IDE Password Reset**\n👤 User: \`${name.toLowerCase()}\`\n🔄 Container \`hermes-ide-${name.toLowerCase()}\` has been restarted with new credentials.`);
 
       return Response.json({ success: true, message: `Password for '${name}' updated` });
     } catch (e: any) {

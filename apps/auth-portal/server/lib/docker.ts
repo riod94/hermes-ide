@@ -47,6 +47,20 @@ export function writeDockerCompose(store: ProfileStore): void {
   writeFileSync(DOCKER_COMPOSE_PATH, content);
 }
 
+export async function restartContainer(serviceName: string): Promise<{ success: boolean; output: string }> {
+  const cwd = join(import.meta.dir, "../../../code-server-infra");
+  // using --no-deps to only recreate the specified container
+  const upProc = Bun.spawn(["docker", "compose", "up", "-d", "--no-deps", serviceName], { cwd, stdout: "pipe", stderr: "pipe" });
+  const upOutput = await new Response(upProc.stdout).text();
+  const upErr = await new Response(upProc.stderr).text();
+  const exitCode = await upProc.exited;
+
+  return {
+    success: exitCode === 0,
+    output: [upOutput, upErr].filter(Boolean).join("\n"),
+  };
+}
+
 export async function restartContainers(): Promise<{ success: boolean; output: string }> {
   const cwd = join(import.meta.dir, "../../../code-server-infra");
   const proc = Bun.spawn(["docker", "compose", "down", "--remove-orphans"], { cwd, stdout: "pipe", stderr: "pipe" });
