@@ -19,7 +19,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       enableScripts: true,
       localResourceRoots: [
         this._extensionUri,
-        vscode.Uri.joinPath(this._extensionUri, '..', 'webview-ui', 'dist'),
+        vscode.Uri.joinPath(this._extensionUri, 'webview-dist'),
       ],
     };
 
@@ -79,8 +79,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
-    // Resolve paths to built webview-ui assets
-    const webviewDistPath = path.join(this._extensionUri.fsPath, '..', 'webview-ui', 'dist');
+    // Resolve paths to built webview-ui assets (bundled inside extension)
+    const webviewDistPath = path.join(this._extensionUri.fsPath, 'webview-dist');
 
     // Read built assets
     let scriptContent = '';

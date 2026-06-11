@@ -8,8 +8,10 @@
   ],
   "scripts": {
     "build:webview": "cd apps/webview-ui && bun run build",
+    "build:copy": "rm -rf apps/extension/webview-dist && cp -r apps/webview-ui/dist apps/extension/webview-dist",
     "build:extension": "cd apps/extension && bun run compile",
-    "build": "bun run build:webview && bun run build:extension",
+    "build": "bun run build:webview && bun run build:copy && bun run build:extension",
+    "package": "bun run build && cd apps/extension && bunx @vscode/vsce package --no-dependencies",
     "dev:webview": "cd apps/webview-ui && bun run dev"
   },
   "devDependencies": {
