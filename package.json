@@ -3,6 +3,15 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build:webview": "cd apps/webview-ui && bun run build",
+    "build:extension": "cd apps/extension && bun run compile",
+    "build": "bun run build:webview && bun run build:extension",
+    "dev:webview": "cd apps/webview-ui && bun run dev"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

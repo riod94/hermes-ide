@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hermes.chatView';
@@ -15,62 +17,115 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this._extensionUri]
+      localResourceRoots: [
+        this._extensionUri,
+        vscode.Uri.joinPath(this._extensionUri, '..', 'webview-ui', 'dist'),
+      ],
     };
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-    webviewView.webview.onDidReceiveMessage(data => {
+    // Handle messages from the webview
+    webviewView.webview.onDidReceiveMessage((data) => {
       switch (data.type) {
         case 'chatMessage':
-          vscode.window.showInformationMessage(`Hermes received: ${data.value}`);
+          this._handleChatMessage(data.value);
+          break;
+        case 'clearChat':
+          // Future: persist clear state
+          break;
+        case 'copyCode':
+          vscode.env.clipboard.writeText(data.value);
+          vscode.window.showInformationMessage('Code copied to clipboard');
+          break;
+        case 'ready':
+          console.log('[Hermes] Webview ready');
           break;
       }
     });
   }
 
-  private _getHtmlForWebview(webview: vscode.Webview) {
-    // Placeholder HTML. Phase 4 will replace this with the built Svelte webview-ui dist.
+  /** Send a message to the webview */
+  public postMessage(message: unknown) {
+    this._view?.webview.postMessage(message);
+  }
+
+  /** Handle incoming chat message from user */
+  private _handleChatMessage(text: string) {
+    // Add user message to webview
+    this.postMessage({
+      type: 'addMessage',
+      message: {
+        id: `msg-${Date.now()}-user`,
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+        status: 'done',
+      },
+    });
+
+    // Simulate agent response (Phase 5 will connect to real Hermes gateway)
+    const responseId = `msg-${Date.now()}-assistant`;
+    this.postMessage({
+      type: 'addMessage',
+      message: {
+        id: responseId,
+        role: 'assistant',
+        content: `Echo: "${text}"\n\n_Hermes gateway not connected yet. This is a Phase 4 placeholder response._`,
+        timestamp: Date.now(),
+        status: 'done',
+      },
+    });
+  }
+
+  private _getHtmlForWebview(webview: vscode.Webview): string {
+    // Resolve paths to built webview-ui assets
+    const webviewDistPath = path.join(this._extensionUri.fsPath, '..', 'webview-ui', 'dist');
+
+    // Read built assets
+    let scriptContent = '';
+    let styleContent = '';
+
+    const jsPath = path.join(webviewDistPath, 'index.js');
+    const cssPath = path.join(webviewDistPath, 'index.css');
+
+    if (fs.existsSync(jsPath)) {
+      scriptContent = fs.readFileSync(jsPath, 'utf-8');
+    }
+    if (fs.existsSync(cssPath)) {
+      styleContent = fs.readFileSync(cssPath, 'utf-8');
+    }
+
+    // Use nonce for Content Security Policy
+    const nonce = getNonce();
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 style-src 'unsafe-inline' ${webview.cspSource};
+                 script-src 'nonce-${nonce}';
+                 font-src ${webview.cspSource};
+                 img-src ${webview.cspSource} https: data:;">
   <title>Hermes Chat</title>
-  <style>
-    body { font-family: var(--vscode-font-family); padding: 10px; color: var(--vscode-foreground); }
-    input { width: 100%; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); box-sizing: border-box; }
-    button { margin-top: 10px; width: 100%; padding: 8px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; cursor: pointer; }
-    button:hover { background: var(--vscode-button-hoverBackground); }
-  </style>
+  <style nonce="${nonce}">${styleContent}</style>
 </head>
 <body>
-  <h2>Hermes AI</h2>
-  <div id="chat-container" style="height: 300px; overflow-y: auto; margin-bottom: 10px; border: 1px solid var(--vscode-panel-border); padding: 5px;"></div>
-  
-  <input type="text" id="chat-input" placeholder="Ask Hermes something..." />
-  <button id="send-btn">Send</button>
-
-  <script>
-    const vscode = acquireVsCodeApi();
-    
-    document.getElementById('send-btn').addEventListener('click', () => {
-      const input = document.getElementById('chat-input');
-      const text = input.value;
-      if (!text) return;
-
-      const container = document.getElementById('chat-container');
-      container.innerHTML += '<p><b>You:</b> ' + text + '</p>';
-      
-      vscode.postMessage({
-        type: 'chatMessage',
-        value: text
-      });
-      
-      input.value = '';
-    });
-  </script>
+  <div id="app"></div>
+  <script nonce="${nonce}">${scriptContent}</script>
 </body>
 </html>`;
   }
+}
+
+function getNonce(): string {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
 }
