@@ -44,11 +44,41 @@ Antarmuka *chat webview* di dalam VS Code (sidebar) yang sangat dinamis:
 ## 4. Mekanisme Security & Onboarding (RBAC)
 
 Keamanan akses IDE ini diatur sangat ketat untuk menghindari akses tidak sah.
-1. **Autentikasi Tersentralisasi**: Tiap profil dilindungi *Password/Passkey*.
-2. **Role-Based Access Control (RBAC)**: Form login hanya bersifat *read-only* bagi developer biasa. Hanya akun dengan level administrator (profil `rio` atau `default`) yang memiliki hak untuk melakukan ubah/reset *password* pengguna lain.
-3. **Distribusi Kredensial Otomatis**: Jika profil `rio` melakukan set/reset password untuk `sabrino`, sistem akan secara otomatis mengirimkan notifikasi beserta kredensial barunya langsung ke channel Discord Nusawork terkait profil `sabrino`.
-4. **Auto-Routing**: Ketika kredensial disubmit, *Reverse Proxy* (Traefik) membaca token/cookie, lalu me-*route* trafiks ke instance Container (Docker/LXC) milik developer tersebut.
-5. **Auto-Login Extension**: Ekstensi di dalam instance otomatis menyerap context environment profil dan menghubungkan diri langsung ke *Hermes API Gateway*.
+
+### 4.1 Auth Portal sebagai Master Dashboard
+Auth Portal bukan hanya halaman login — ia adalah **fullstack app** (Svelte frontend + Bun API backend) yang menjadi pusat manajemen seluruh profil IDE.
+
+**Backend API (`Bun.serve`):**
+- Melayani static files UI Svelte dan menyediakan endpoint REST `/api/profiles`.
+- Data profil disimpan di `apps/auth-portal/data/profiles.json`.
+- Mampu men-generate ulang `docker-compose.yml` dan me-restart container Docker secara otomatis.
+
+**Port Allocation (Otomatis & Alfabetis):**
+- Port `51000` — Auth Portal (Bun server).
+- Port `51001+` — Code-server instances, dialokasikan otomatis berdasarkan **urutan abjad** nama profil.
+- Contoh: abdi=51001, default=51002, giffary=51003, meysha=51004, renanda=51005, rianto=51006, rio=51007, ryan=51008, sabrino=51009.
+- Saat profil ditambah/dihapus, seluruh port di-*reallocate* ulang agar tetap urut.
+
+### 4.2 Role-Based Access
+1. **Profil `default` (Master/Admin)**:
+   - Login dengan profil `default` akan masuk ke **Admin Dashboard** (bukan redirect ke code-server).
+   - Dari dashboard ini, admin bisa:
+     - Melihat daftar semua profil beserta status & port.
+     - Menambah profil baru (nama + password).
+     - Menghapus profil.
+     - Mengubah/reset password profil.
+     - Menekan tombol **"Sync & Deploy"** untuk men-generate ulang `docker-compose.yml` dan me-restart seluruh container.
+2. **Profil `rio` (Co-Admin)**:
+   - Memiliki hak yang sama dengan `default` untuk manajemen profil.
+3. **Profil lainnya (Developer)**:
+   - Hanya bisa login dan langsung di-redirect ke code-server instance miliknya.
+   - Tidak memiliki akses ke Admin Dashboard.
+
+### 4.3 Autentikasi & Routing
+1. **Autentikasi Tersentralisasi**: Auth Portal memvalidasi password terhadap `profiles.json` via API backend.
+2. **Direct Port Routing**: Setelah validasi sukses, user di-redirect langsung ke port code-server miliknya (tanpa reverse proxy path-based). Keamanan code-server tetap dijaga oleh password native bawaan code-server yang di-sync dari `profiles.json`.
+3. **Distribusi Kredensial Otomatis**: Jika admin melakukan set/reset password, sistem mengirimkan notifikasi beserta kredensial baru ke channel Discord terkait.
+4. **Auto-Login Extension**: Ekstensi di dalam instance otomatis menyerap context environment profil dan menghubungkan diri langsung ke *Hermes API Gateway*.
 
 ---
 
@@ -58,43 +88,60 @@ Keamanan akses IDE ini diatur sangat ketat untuk menghindari akses tidak sah.
 
 ```mermaid
 graph TD
-    User([Browser User]) -->|HTTPS Request| AP[Auth & Onboarding Portal]
+    User([Browser User]) -->|HTTP :51000| AP[Auth Portal<br/>Bun Server + Svelte UI]
     
-    subgraph Security Layer
-        AP -->|Validate Credentials| AuthDB[(Auth Config)]
-        AP -->|Issue Token| Proxy[Traefik Reverse Proxy]
+    subgraph Auth Portal - Port 51000
+        AP -->|POST /api/auth| API[Bun API Server]
+        API -->|Validate| DB[(data/profiles.json)]
+        API -->|Admin Login| Dashboard[Admin Dashboard]
+        Dashboard -->|POST /api/profiles| API
+        API -->|Generate| DCY[docker-compose.yml]
+        API -->|Exec| Docker[Docker Compose Restart]
     end
     
-    subgraph Workspaces
-        Proxy -->|Routing: /rio| C1[Code-Server: Rio]
-        Proxy -->|Routing: /sabrino| C2[Code-Server: Sabrino]
+    subgraph Code-Server Instances - Port 51001+
+        CS1[code-server: abdi<br/>:51001]
+        CS2[code-server: default<br/>:51002]
+        CS3[code-server: giffary<br/>:51003]
+        CSn[code-server: ...<br/>:510xx]
     end
+    
+    AP -->|Redirect :port| CS1
+    AP -->|Redirect :port| CS2
+    AP -->|Redirect :port| CS3
     
     subgraph Extension & Core
-        C1 -->|Svelte Webview| Ext[Hermes VS Code Ext]
+        CS2 -->|Svelte Webview| Ext[Hermes VS Code Ext]
         Ext <-->|WebSocket/REST| HG[Hermes API Gateway]
-        HG <--> Core[Hermes Core Agent]
+        HG <-->Core[Hermes Core Agent]
     end
     
-    Admin([Admin: Rio/Default]) -.->|Manage Passwords| AP
-    AP -.->|Push Notification| Discord[Discord Channels]
+    Admin([Admin: default/rio]) -.->|Manage Profiles| Dashboard
+    Dashboard -.->|Push Notification| Discord[Discord Channels]
 ```
 
 ### 5.2 Security Flowchart
 
 ```mermaid
 flowchart TD
-    Start([User Buka URL IDE]) --> A{Sudah Login?}
-    A -- Ya --> B[Akses Code-Server via Reverse Proxy]
-    A -- Belum --> C[Halaman Auth Portal]
-    C --> D[Pilih Profil & Input Password]
-    D --> E{Validasi Sukses?}
-    E -- Tidak --> F[Tolak Akses]
-    E -- Ya --> G[Set Session Cookie/Token]
-    G --> B
+    Start([User Buka :51000]) --> A[Halaman Auth Portal]
+    A --> B[Pilih Profil & Input Password]
+    B --> C{POST /api/auth}
+    C -- Invalid --> D[Tolak Akses - Error Message]
+    C -- Valid & Admin --> E[Redirect ke Admin Dashboard]
+    C -- Valid & Developer --> F[Redirect ke code-server :port]
     
-    H([Admin Reset Password]) --> I[Update Auth Config]
-    I --> J[Kirim Notifikasi ke Discord Channel Profil]
+    E --> G{Admin Action?}
+    G --> H[Add Profile]
+    G --> I[Remove Profile]
+    G --> J[Reset Password]
+    G --> K[Sync & Deploy]
+    
+    H & I & J --> L[Update profiles.json]
+    L --> K
+    K --> M[Re-generate docker-compose.yml]
+    M --> N[Docker Compose Restart]
+    N --> O[Kirim Notifikasi Discord]
 ```
 
 ---
@@ -104,8 +151,8 @@ flowchart TD
 - **Framework Webview Ekstensi & Auth Portal**: **Svelte**. (Alasan: Reaktivitas tingkat compiler, *bundle size* super kecil yang krusial untuk performa Extension Webview VS Code).
 - **Styling**: Tailwind CSS terintegrasi dengan **VS Code Webview UI Toolkit** (memanfaatkan *CSS variables* native VS Code `var(--vscode-*)` agar ekstensi otomatis mengikuti tema IDE).
 - **Runtime & Build Tool**: **Bun** (super cepat untuk package manager dan runtime) + Vite.
-- **Infrastruktur Workspace**: OpenVSCode Server (linuxserver/code-server), di-deploy dalam container terisolasi (Docker).
-- **Reverse Proxy & Routing**: Traefik (mendukung dynamic routing berbasis cookie/header).
+- **Infrastruktur Workspace**: OpenVSCode Server (linuxserver/code-server), di-deploy dalam container terisolasi (Docker). Tanpa reverse proxy — setiap profil diekspos langsung di port unik (range `51001+`, urut abjad).
+- **Auth Portal Backend**: `Bun.serve` — melayani static Svelte UI + REST API untuk manajemen profil, generate docker-compose, dan restart container.
 
 ---
 
@@ -117,24 +164,39 @@ Proyek akan dijalankan sebagai *Monorepo* menggunakan Bun workspaces.
 hermes-ide-extension/
 ├── package.json (Bun Monorepo Root)
 ├── bun.lockb
+├── PRD.md
 ├── apps/
-│   ├── auth-portal/          # SvelteKit App untuk Onboarding & Login
-│   │   ├── src/
-│   │   └── Dockerfile
-│   └── code-server-infra/    # Konfigurasi Infrastruktur IDE
-│       ├── docker-compose.yml
-│       ├── traefik/
-│       └── scripts/          # Script reset password & notif Discord
-└── extension/                # VS Code Extension Utama
+│   ├── auth-portal/              # Fullstack App: Svelte UI + Bun API Server
+│   │   ├── src/                  # Svelte Frontend
+│   │   │   ├── App.svelte        # Login Page
+│   │   │   ├── Dashboard.svelte  # Admin Dashboard (profile management)
+│   │   │   └── main.ts
+│   │   ├── server/               # Bun Backend API
+│   │   │   ├── index.ts          # Bun.serve entry point (static + API)
+│   │   │   ├── routes/           # API route handlers
+│   │   │   │   ├── auth.ts       # POST /api/auth
+│   │   │   │   ├── profiles.ts   # GET/POST/PUT/DELETE /api/profiles
+│   │   │   │   └── deploy.ts     # POST /api/deploy (sync & restart)
+│   │   │   └── lib/
+│   │   │       ├── docker.ts     # Docker compose generator & restart
+│   │   │       └── discord.ts    # Discord notification helper
+│   │   ├── data/
+│   │   │   └── profiles.json     # Master profile database
+│   │   ├── vite.config.ts
+│   │   └── package.json
+│   └── code-server-infra/        # Generated by Auth Portal API
+│       ├── docker-compose.yml    # Auto-generated, do NOT edit manually
+│       └── workspace-*/          # Per-profile workspace volumes
+└── extension/                    # VS Code Extension Utama (Phase 3+)
     ├── package.json
-    ├── src/                  # Extension Host (Node.js/TS)
+    ├── src/                      # Extension Host (Node.js/TS)
     │   ├── extension.ts
-    │   ├── providers/        # ChatViewProvider
-    │   ├── utils/            # Interceptors (Diff, File)
-    │   └── gateway/          # Hermes API Client
-    └── webview-ui/           # Svelte App untuk Sidebar UI
+    │   ├── providers/            # ChatViewProvider
+    │   ├── utils/                # Interceptors (Diff, File)
+    │   └── gateway/              # Hermes API Client
+    └── webview-ui/               # Svelte App untuk Sidebar UI
         ├── src/
-        │   ├── components/   # Chat, Attachments, Checklists
+        │   ├── components/       # Chat, Attachments, Checklists
         │   ├── App.svelte
         │   └── main.ts
         └── vite.config.ts
@@ -144,16 +206,19 @@ hermes-ide-extension/
 
 ## 8. Development Phases & SDLC
 
-### **Phase 1: Infrastruktur Security & Workspace Dasar**
+### **Phase 1: Auth Portal Fullstack & Infrastruktur Workspace**
 - Inisialisasi Bun Monorepo.
-- Konfigurasi `apps/code-server-infra/` (Docker Compose untuk Traefik dan 1 mock code-server instance).
-- Pembuatan sistem *routing* statis.
+- Development Auth Portal sebagai **fullstack app** (Svelte UI + Bun API backend).
+- Implementasi Login Page & Admin Dashboard.
+- Backend API: manajemen profil (CRUD), auto port allocation (abjad), generate `docker-compose.yml`, restart Docker container.
+- Konfigurasi `apps/code-server-infra/` — auto-generated oleh API, bukan diedit manual.
+- Port scheme: `51000` Auth Portal, `51001+` code-server instances (urut abjad).
 
-### **Phase 2: Auth Portal & RBAC Development**
-- Development `apps/auth-portal/` menggunakan SvelteKit.
-- Pembuatan flow Login dan Role-Based Access Control.
-- Script *management password* (Admin only).
-- Integrasi push notifikasi via API Discord/Hermes Gateway ketika ada perbaruan kredensial.
+### **Phase 2: RBAC, Kredensial & Notifikasi**
+- Implementasi role-based access: `default`/`rio` sebagai admin, lainnya developer.
+- Flow reset password dari Admin Dashboard.
+- Integrasi push notifikasi via API Discord ketika ada pembaruan kredensial.
+- Password sync: password di `profiles.json` otomatis disinkronkan ke environment Docker container.
 
 ### **Phase 3: Extension Boilerplate & Gateway Connection**
 - Setup `extension/` menggunakan `yo code` template disesuaikan dengan Svelte+Vite.
