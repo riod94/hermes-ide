@@ -78,6 +78,14 @@ export function updatePassword(store: ProfileStore, name: string, password: stri
   return store;
 }
 
+export function updateRole(store: ProfileStore, name: string, role: "admin" | "developer"): ProfileStore {
+  if (name === "default") throw new Error("Cannot change role of 'default' profile");
+  const profile = store.profiles.find((p) => p.name === name);
+  if (!profile) throw new Error(`Profile '${name}' not found`);
+  profile.role = role;
+  return store;
+}
+
 export function getProfile(store: ProfileStore, name: string): Profile | undefined {
   return store.profiles.find((p) => p.name === name);
 }

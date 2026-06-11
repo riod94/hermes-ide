@@ -4,7 +4,7 @@ import {
   addProfile,
   removeProfile,
   updatePassword,
-  recalculatePorts,
+  updateRole,
   type ProfileStore,
 } from "../lib/store";
 
@@ -17,12 +17,20 @@ function authenticate(req: Request): { authorized: boolean; role?: string; name?
   const auth = req.headers.get("x-auth");
   if (!auth) return { authorized: false };
 
-  const [name, password] = auth.split(":");
+  const [name, ...rest] = auth.split(":");
+  const password = rest.join(":"); // password bisa mengandung ':'
   const store = loadStore();
   const profile = store.profiles.find((p) => p.name === name && p.password === password);
   if (!profile) return { authorized: false };
 
   return { authorized: true, role: profile.role, name: profile.name };
+}
+
+/** GET /api/profile-names — public, returns only names for login dropdown */
+export async function handleProfileNames(_req: Request): Promise<Response> {
+  const store = loadStore();
+  const names = store.profiles.map((p) => p.name);
+  return Response.json({ names });
 }
 
 export async function handleProfiles(req: Request): Promise<Response> {
@@ -36,7 +44,6 @@ export async function handleProfiles(req: Request): Promise<Response> {
   // GET /api/profiles — list all
   if (req.method === "GET") {
     const store = loadStore();
-    // hide passwords in list response, admin can see ports
     const profiles = store.profiles.map((p) => ({
       name: p.name,
       role: p.role,
@@ -80,6 +87,30 @@ export async function handleProfiles(req: Request): Promise<Response> {
       saveStore(store);
 
       return Response.json({ success: true, message: `Password for '${name}' updated` });
+    } catch (e: any) {
+      return Response.json({ error: e.message }, { status: 400 });
+    }
+  }
+
+  // PATCH /api/profiles — update role
+  if (req.method === "PATCH") {
+    try {
+      const body = await req.json() as { name: string; role: string };
+      const { name, role } = body;
+
+      if (!name || !role) {
+        return Response.json({ error: "Name and role required" }, { status: 400 });
+      }
+
+      if (role !== "admin" && role !== "developer") {
+        return Response.json({ error: "Role must be 'admin' or 'developer'" }, { status: 400 });
+      }
+
+      let store = loadStore();
+      store = updateRole(store, name, role as "admin" | "developer");
+      saveStore(store);
+
+      return Response.json({ success: true, message: `Role for '${name}' updated to '${role}'` });
     } catch (e: any) {
       return Response.json({ error: e.message }, { status: 400 });
     }

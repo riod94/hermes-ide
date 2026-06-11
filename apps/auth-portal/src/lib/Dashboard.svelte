@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
-  import { listProfiles, addProfile, updateProfilePassword, removeProfile, deploy, type ProfileInfo } from './api';
+  import { listProfiles, addProfile, updateProfilePassword, updateProfileRole, removeProfile, deploy, type ProfileInfo } from './api';
 
   export let adminName: string;
   export let adminPassword: string;
@@ -25,6 +25,10 @@
 
   // Delete confirm
   let deletingProfile: string | null = null;
+
+  // Edit role modal
+  let editingRoleProfile: string | null = null;
+  let editRole: string = "developer";
 
   onMount(() => fetchProfiles());
 
@@ -75,6 +79,23 @@
       }
     } catch (e) {
       showMessage("Gagal mengubah password", "error");
+    }
+  }
+
+  async function handleUpdateRole() {
+    if (!editingRoleProfile || !editRole) return;
+    try {
+      const result = await updateProfileRole(adminName, adminPassword, editingRoleProfile, editRole);
+      if (result.success) {
+        showMessage(`Role '${editingRoleProfile}' diubah menjadi '${editRole}'`, "success");
+        editingRoleProfile = null;
+        editRole = "developer";
+        await fetchProfiles();
+      } else {
+        showMessage(result.error || "Gagal mengubah role", "error");
+      }
+    } catch (e) {
+      showMessage("Gagal mengubah role", "error");
     }
   }
 
@@ -350,6 +371,13 @@
                   </button>
                   {#if profile.name !== "default"}
                     <button
+                      on:click={() => { editingRoleProfile = profile.name; editRole = profile.role; }}
+                      class="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-zinc-800 rounded-lg transition-all"
+                      title="Ubah role"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    </button>
+                    <button
                       on:click={() => { deletingProfile = profile.name; }}
                       class="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-all"
                       title="Hapus profil"
@@ -453,6 +481,44 @@
           </button>
           <button
             on:click={() => { deletingProfile = null; }}
+            class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 font-medium rounded-xl text-sm transition-all"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Edit Role Modal -->
+  {#if editingRoleProfile}
+    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div class="bg-zinc-900 border border-zinc-700/60 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-zinc-100">Change Role</h3>
+            <p class="text-xs text-zinc-500">{editingRoleProfile}</p>
+          </div>
+        </div>
+        <select
+          bind:value={editRole}
+          class="w-full bg-zinc-800/80 border border-zinc-700/60 text-zinc-200 rounded-xl px-4 py-3 text-sm mb-5 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all"
+        >
+          <option value="developer">Developer</option>
+          <option value="admin">Admin</option>
+        </select>
+        <div class="flex gap-3">
+          <button
+            on:click={handleUpdateRole}
+            class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl text-sm transition-all shadow-lg shadow-blue-500/20"
+          >
+            Save
+          </button>
+          <button
+            on:click={() => { editingRoleProfile = null; }}
             class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 font-medium rounded-xl text-sm transition-all"
           >
             Cancel

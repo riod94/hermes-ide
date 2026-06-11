@@ -1,6 +1,6 @@
 import { join } from "path";
 import { handleAuth } from "./routes/auth";
-import { handleProfiles } from "./routes/profiles";
+import { handleProfiles, handleProfileNames } from "./routes/profiles";
 import { handleDeploy } from "./routes/deploy";
 
 const STATIC_DIR = join(import.meta.dir, "../dist");
@@ -73,6 +73,12 @@ const server = Bun.serve({
     // API routes
     if (pathname === "/api/auth") {
       const res = await handleAuth(req);
+      res.headers.set("Access-Control-Allow-Origin", "*");
+      return res;
+    }
+
+    if (pathname === "/api/profile-names") {
+      const res = await handleProfileNames(req);
       res.headers.set("Access-Control-Allow-Origin", "*");
       return res;
     }

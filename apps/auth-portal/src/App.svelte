@@ -8,6 +8,7 @@
   let isLoading = false;
   let showPassword = false;
   let errorMsg = "";
+  let checkingSession = true;
 
   // Session state
   let loggedIn = false;
@@ -20,18 +21,47 @@
   let profileNames: string[] = [];
 
   onMount(async () => {
+    // 1. Try restore session from localStorage
+    const saved = localStorage.getItem("hermes-ide-session");
+    if (saved) {
+      try {
+        const session = JSON.parse(saved);
+        // Validate session is still valid via API
+        const result = await login(session.name, session.password);
+        if (result.success && result.profile) {
+          sessionName = result.profile.name;
+          sessionRole = result.profile.role;
+          sessionPort = result.profile.port;
+          sessionPassword = session.password;
+
+          if (sessionRole === "admin") {
+            loggedIn = true;
+            checkingSession = false;
+            return;
+          } else {
+            // Developer — redirect
+            const host = window.location.hostname;
+            window.location.href = `http://${host}:${sessionPort}/`;
+            return;
+          }
+        }
+      } catch {
+        // Session invalid, clear
+        localStorage.removeItem("hermes-ide-session");
+      }
+    }
+
+    checkingSession = false;
+
+    // 2. Fetch profile names for dropdown
     try {
-      // Fetch profile list (public endpoint — just names for dropdown)
-      const res = await fetch("/api/profiles", {
-        headers: { "X-Auth": "default:nusawork2025" }
-      });
+      const res = await fetch("/api/profile-names");
       if (res.ok) {
         const data = await res.json();
-        profileNames = data.profiles.map((p: any) => p.name);
+        profileNames = data.names || [];
         if (profileNames.length > 0) selectedProfile = profileNames[0];
       }
     } catch {
-      // Fallback if API not ready
       profileNames = ["default"];
       selectedProfile = "default";
     }
@@ -55,11 +85,15 @@
         sessionPort = result.profile.port;
         sessionPassword = password;
 
+        // Save session to localStorage
+        localStorage.setItem("hermes-ide-session", JSON.stringify({
+          name: sessionName,
+          password: sessionPassword,
+        }));
+
         if (sessionRole === "admin") {
-          // Admin → show dashboard
           loggedIn = true;
         } else {
-          // Developer → redirect to code-server
           const host = window.location.hostname;
           window.location.href = `http://${host}:${sessionPort}/`;
         }
@@ -80,6 +114,7 @@
     sessionRole = "";
     sessionPort = 0;
     password = "";
+    localStorage.removeItem("hermes-ide-session");
   }
 
   function togglePassword() {
@@ -91,7 +126,15 @@
   }
 </script>
 
-{#if loggedIn && sessionRole === "admin"}
+{#if checkingSession}
+  <!-- Loading splash while checking session -->
+  <main class="min-h-screen w-full flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black">
+    <div class="flex flex-col items-center gap-4">
+      <svg class="animate-spin w-10 h-10 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+      <p class="text-zinc-400 text-sm">Checking session...</p>
+    </div>
+  </main>
+{:else if loggedIn && sessionRole === "admin"}
   <Dashboard
     adminName={sessionName}
     adminPassword={sessionPassword}

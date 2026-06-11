@@ -58,6 +58,15 @@ export async function removeProfile(adminName: string, adminPass: string, profil
   return res.json();
 }
 
+export async function updateProfileRole(adminName: string, adminPass: string, profileName: string, newRole: string) {
+  const res = await fetch(`${API_BASE}/api/profiles`, {
+    method: "PATCH",
+    headers: authHeader(adminName, adminPass),
+    body: JSON.stringify({ name: profileName, role: newRole }),
+  });
+  return res.json();
+}
+
 export async function deploy(adminName: string, adminPass: string) {
   const res = await fetch(`${API_BASE}/api/deploy`, {
     method: "POST",
