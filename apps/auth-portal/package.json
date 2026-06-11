@@ -7,11 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "bun run build && bun server/index.ts",
+    "server": "bun server/index.ts",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tsconfig/svelte": "^5.0.8",
+    "@types/bun": "^1.3.14",
     "@types/node": "^24.12.3",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.15",
