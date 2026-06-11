@@ -11,7 +11,11 @@
     isLoading = true;
     setTimeout(() => {
       console.log(`Login attempt for ${selectedProfile}`);
-      window.location.href = `http://${selectedProfile}.hermes-ide.local/`;
+      let port = 51000;
+      if (selectedProfile === "rio") port = 51001;
+      else if (selectedProfile === "default") port = 51002;
+      else if (selectedProfile === "sabrino") port = 51003;
+      window.location.href = `http://103.196.116.213:${port}/`;
       isLoading = false;
     }, 1000);
   }
