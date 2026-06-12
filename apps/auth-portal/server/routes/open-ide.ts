@@ -1,4 +1,5 @@
 import { loadStore, getProfile } from "../lib/store";
+import { getIdeUrl } from "../lib/docker";
 
 /**
  * Proxy login ke code-server — ambil session cookie, redirect browser user
@@ -48,10 +49,9 @@ export async function handleOpenIDE(req: Request): Promise<Response> {
     return Response.json({ error: `Profile '${profileName}' not found` }, { status: 404 });
   }
 
-  // Determine host: use the requesting host (not localhost) so it works from browser
-  const requestHost = req.headers.get("host") || "localhost";
-  const hostName = requestHost.split(":")[0]; // strip port if present
-  const codeServerUrl = `http://${hostName}:${targetProfile.port}`;
+  // Determine host: use HTTPS subdomain via nginx reverse proxy
+  // ide-{name}.app.dev.nusa.work → proxied to code-server on localhost:{port}
+  const codeServerUrl = getIdeUrl(profileName); // https://ide-{name}.app.dev.nusa.work/
   const codeServerInternal = `http://localhost:${targetProfile.port}`;
 
   try {
@@ -73,35 +73,15 @@ export async function handleOpenIDE(req: Request): Promise<Response> {
 
     // Parse cookie name and value
     const cookieParts = setCookie.split(";")[0]; // "code-server-session=..."
-    
-    // Redirect browser to code-server with the session cookie set for code-server's domain/port
-    // We use a small HTML page that sets the cookie via JS then redirects
-    const html = `<!DOCTYPE html>
-<html>
-<head><title>Redirecting to IDE...</title></head>
-<body>
-<script>
-  // Set the code-server session cookie for the target port
-  document.cookie = "${cookieParts.replace(/"/g, '\\"')}; path=/; SameSite=Lax";
-  window.location.href = "${codeServerUrl}/";
-</script>
-<noscript><a href="${codeServerUrl}/">Click here to continue</a></noscript>
-</body>
-</html>`;
 
-    // But the cookie domain mismatch is a problem — cookies set from :51000 won't be sent to :51001
-    // Solution: redirect to a special endpoint ON the code-server port that sets the cookie
-    // Since we can't add endpoints to code-server, we use an iframe trick or just redirect with cookie in URL
-    
-    // Actually the cleanest approach: respond with redirect to code-server,
-    // and set the cookie with the correct domain (same hostname, different port — cookies are NOT port-scoped!)
-    // Cookies in HTTP are shared across ports on the same hostname.
-    
+    // Cross-subdomain: Auth Portal (ide.app.dev.nusa.work) sets cookie for
+    // code-server (ide-rio.app.dev.nusa.work). Both share parent domain .app.dev.nusa.work,
+    // so setting Domain=.app.dev.nusa.work makes the cookie available across subdomains.
     return new Response(null, {
       status: 302,
       headers: {
-        "Location": `${codeServerUrl}/`,
-        "Set-Cookie": `${cookieParts}; Path=/; SameSite=Lax`,
+        "Location": codeServerUrl,
+        "Set-Cookie": `${cookieParts}; Path=/; Domain=.app.dev.nusa.work; SameSite=Lax; Secure`,
       },
     });
 

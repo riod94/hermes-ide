@@ -6,4 +6,6 @@ src/**
 .gitignore
 .yarnrc
 tsconfig.json
+**/*.map
 esbuild.js
+bun.lock

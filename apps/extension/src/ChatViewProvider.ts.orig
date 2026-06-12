@@ -110,26 +110,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // Call Hermes API
     let fullContent = '';
-    try {
-      await this._hermesClient.streamChat(text, contextString, (chunk: string) => {
-        fullContent += chunk;
-        this.postMessage({
-          type: 'updateMessage',
-          id: responseId,
-          content: fullContent,
-        });
+    await this._hermesClient.streamChat(text, contextString, (chunk: string) => {
+      fullContent += chunk;
+      this.postMessage({
+        type: 'updateMessage',
+        messageId: responseId,
+        content: fullContent,
       });
-    } catch (e: any) {
-      console.error(e);
-      fullContent += `\\n\\nError: ${e.message}`;
-    }
+    });
 
     // Finalize message status
     this.postMessage({
-      type: 'updateMessage',
-      id: responseId,
-      content: fullContent,
-      status: 'done'
+      type: 'messageComplete',
+      messageId: responseId,
     });
   }
 
