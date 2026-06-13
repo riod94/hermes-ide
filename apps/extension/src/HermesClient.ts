@@ -51,15 +51,39 @@ export class HermesClient {
               const trimmed = line.trim();
               if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
                 try {
-                  const data = JSON.parse(trimmed.slice(6));
+                  let rawLine = trimmed.slice(6);
+                  // Kadang Hermes API mengirim event marker sebelum data
+                  if (trimmed.startsWith("event: ")) {
+                      continue; // Abaikan baris event, parse data di baris berikutnya
+                  }
+                  
+                  const data = JSON.parse(rawLine);
+                  
+                  // CEGATAN DARI EXTENSION (NATIVE)
+                  if (data.type === "response.output_item.added" && data.item?.type === "function_call") {
+                    const toolName = data.item.name;
+                    if (toolName === "write_file" || toolName === "patch") {
+                       onChunk(`__HERMES_PROPOSE_DIFF__`);
+                    } else if (toolName === "search_files" || toolName === "read_file") {
+                       onChunk(`\n> ⏳ **Exploring codebase...**\n`);
+                    } else {
+                       onChunk(`\n> ⏳ **Using tool: ${toolName}...**\n`);
+                    }
+                    continue;
+                  }
+
                   if (data.type === "response.output_text.delta") {
                     onChunk(data.delta || data.text || "");
                   } else if (data.type === "function_call") {
                     onChunk(`\n> 🛠️ **Mengerjakan Tool: ${data.name}**\n`);
                   } else if (data.choices && data.choices[0].delta?.content) {
                     onChunk(data.choices[0].delta.content);
+                  } else if (data.event === "hermes.tool.progress") {
+                    onChunk(`\n> 🛠️ **${data.tool}**: ${JSON.stringify(data.arguments || {})}\n`);
                   }
-                } catch (e) { }
+                } catch (e) {
+                  // Silently ignore parse errors for incomplete chunks
+                }
               }
             }
           }

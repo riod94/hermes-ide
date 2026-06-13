@@ -1,6 +1,23 @@
 import * as vscode from 'vscode';
 import { HermesClient } from './HermesClient';
 
+// TextDocumentContentProvider for hermes-draft
+class HermesDraftProvider implements vscode.TextDocumentContentProvider {
+  private _drafts = new Map<string, string>();
+  
+  public setDraft(filepath: string, content: string) {
+    this._drafts.set(filepath, content);
+  }
+
+  public provideTextDocumentContent(uri: vscode.Uri): string {
+    // uri is something like hermes-draft:/path/to/file
+    const filepath = uri.path;
+    return this._drafts.get(filepath) || '';
+  }
+}
+
+export const draftProvider = new HermesDraftProvider();
+
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hermes.chatView';
   private _view?: vscode.WebviewView;
@@ -32,6 +49,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'chatMessage':
           this._handleChatMessage(data.value);
           break;
+        case 'resolveDiff':
+          if (data.action === "approve") {
+            const edit = new vscode.WorkspaceEdit();
+            edit.replace(vscode.Uri.file(data.filepath), new vscode.Range(0, 0, 99999, 99999), data.newContent);
+            vscode.workspace.applyEdit(edit).then(success => {
+              if (success) {
+                vscode.window.showInformationMessage("Diff Applied!");
+                // optionally close diff tab
+              }
+            });
+          }
+          break;
         case 'clearChat':
           // Future: persist clear state
           break;
@@ -42,6 +71,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'ready':
           console.log('[Hermes] Webview ready');
           break;
+        case 'openDiff':
+          this._handleOpenDiff(data.value);
+          break;
+        case 'resolveDiff':
+          this._handleResolveDiff(data.value);
+          break;
       }
     });
   }
@@ -49,6 +84,58 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Send a message to the webview */
   public postMessage(message: unknown) {
     this._view?.webview.postMessage(message);
+  }
+
+  /** Handle opening Diff view in VS Code */
+  private async _handleOpenDiff(payload: { filepath: string, originalContent: string, newContent: string }) {
+    try {
+      const originalUri = vscode.Uri.file(payload.filepath);
+      
+      // Provide a virtual doc for the proposed changes
+      draftProvider.setDraft(payload.filepath, payload.newContent);
+      const draftUri = vscode.Uri.parse(`hermes-draft:${payload.filepath}`);
+      
+      await vscode.commands.executeCommand(
+        'vscode.diff',
+        originalUri,
+        draftUri,
+        `Review Draft: ${payload.filepath.split('/').pop()}`,
+        { preview: true }
+      );
+    } catch (e) {
+      console.error('[Hermes] Failed to open diff', e);
+      vscode.window.showErrorMessage('Hermes: Failed to open Diff view.');
+    }
+  }
+
+  /** Handle user Approve/Reject action on diff */
+  private async _handleResolveDiff(payload: { diffId: string, action: 'approve' | 'reject', filepath?: string, newContent?: string }) {
+    try {
+      // If approved, write to real file system first
+      if (payload.action === 'approve' && payload.filepath && payload.newContent !== undefined) {
+        const fileUri = vscode.Uri.file(payload.filepath);
+        const encoder = new TextEncoder();
+        await vscode.workspace.fs.writeFile(fileUri, encoder.encode(payload.newContent));
+        vscode.window.showInformationMessage(`Hermes: Applied changes to ${payload.filepath.split('/').pop()}`);
+        
+        // Close the diff tab automatically
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+      }
+
+      // Notify the MCP Interceptor
+      const res = await globalThis.fetch(`http://host.docker.internal:51500/api/diffs/${payload.diffId}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: payload.action })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to resolve on Interceptor API. Status: ${res.status}`);
+      }
+    } catch (e) {
+      console.error('[Hermes] Failed to resolve diff', e);
+      vscode.window.showErrorMessage('Hermes: Failed to notify agent about diff resolution.');
+    }
   }
 
   /** Handle incoming chat message from user */
@@ -112,16 +199,31 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     let fullContent = '';
     try {
       await this._hermesClient.streamChat(text, contextString, (chunk: string) => {
+        // CEGATAN: Tangkap perintah "__HERMES_PROPOSE_DIFF__" dari Client
+        if (chunk === "__HERMES_PROPOSE_DIFF__") {
+          // Beri tahu Svelte UI untuk merender alert Diff!
+          this.postMessage({
+            type: 'triggerDiff',
+            filepath: editor?.document.uri.fsPath || "workspace-file",
+            // Ideally LLM akan memberikan isi diff-nya, tapi untuk saat ini:
+            // kita hardcode dummy diff sebagai proof of concept
+            originalContent: editor?.document.getText() || "",
+            newContent: (editor?.document.getText() || "") + "\n// Proposed by Hermes"
+          });
+          return;
+        }
+
         fullContent += chunk;
         this.postMessage({
           type: 'updateMessage',
           id: responseId,
           content: fullContent,
+          status: 'streaming',
         });
       });
     } catch (e: any) {
       console.error(e);
-      fullContent += `\\n\\nError: ${e.message}`;
+      fullContent += `\n\nError: ${e.message}`;
     }
 
     // Finalize message status

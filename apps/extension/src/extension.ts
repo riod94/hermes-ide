@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
-import { ChatViewProvider } from './ChatViewProvider';
+import { ChatViewProvider, draftProvider } from './ChatViewProvider';
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Hermes IDE Extension is now active.');
+  console.log('Hermes Extension activated');
 
-  // Register Webview Provider
+  // Register TextDocumentContentProvider for Draft Diffs
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider('hermes-draft', draftProvider)
+  );
   const provider = new ChatViewProvider(context.extensionUri);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, provider)
