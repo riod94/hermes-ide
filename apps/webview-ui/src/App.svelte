@@ -7,8 +7,30 @@
   import { messages, isLoading, addMessage, updateMessage, clearMessages } from './lib/store';
   import { vscode } from './lib/vscode';
   import type { IncomingMessage } from './lib/types';
+  import DiffAlert from './components/DiffAlert.svelte';
 
   let chatContainerEl: HTMLDivElement | undefined = $state();
+  
+  // Diff Polling State
+  let pendingDiffs: any[] = $state([]);
+  let pollInterval: ReturnType<typeof setInterval>;
+
+  $effect(() => {
+    // Start polling the MCP Interceptor HTTP Server for pending diffs
+    pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('http://host.docker.internal:51500/api/diffs/pending');
+        if (res.ok) {
+          const data = await res.json();
+          pendingDiffs = data.pending || [];
+        }
+      } catch (err) {
+        // Silently ignore connection errors (server might be down)
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  });
 
   // Auto-scroll to bottom when new messages arrive
   $effect(() => {
@@ -39,6 +61,17 @@
             isLoading.set(false);
           }
           break;
+        case 'triggerDiff':
+          // Menampilkan Pop-Up Alert secara native di Webview!
+          const diffMsg = msg as any;
+          const result = window.confirm(`Hermes proposes changes to ${diffMsg.filepath}. Do you want to review and apply them?`);
+          vscode.postMessage({ 
+            type: 'resolveDiff', 
+            action: result ? 'approve' : 'reject',
+            filepath: diffMsg.filepath,
+            newContent: diffMsg.newContent
+          });
+          break;
         case 'clearMessages':
           clearMessages();
           break;
@@ -66,6 +99,8 @@
 </script>
 
 <div class="flex flex-col h-screen overflow-hidden" style="background: var(--color-bg);">
+  <DiffAlert {pendingDiffs} />
+  
   <!-- Header -->
   <ChatHeader onClear={handleClear} />
 

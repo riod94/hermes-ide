@@ -16,7 +16,7 @@
     <div>
       <div class="flex items-center gap-1.5">
         <h1 class="text-[13px] font-semibold leading-tight" style="color: var(--color-fg);">Hermes AI</h1>
-        <span class="text-[9px] px-1 rounded-sm" style="background: var(--color-input-bg); color: var(--color-muted); border: 1px solid var(--color-border);">v0.2.2</span>
+        <span class="text-[9px] px-1 rounded-sm" style="background: var(--color-input-bg); color: var(--color-muted); border: 1px solid var(--color-border);">v0.2.6</span>
       </div>
       <p class="text-[10px] leading-tight" style="color: var(--color-muted);">Agentic Coding Assistant</p>
     </div>
