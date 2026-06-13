@@ -3,6 +3,7 @@ import { handleAuth } from "./routes/auth";
 import { handleProfiles, handleProfileNames } from "./routes/profiles";
 import { handleDeploy } from "./routes/deploy";
 import { handleOpenIDE } from "./routes/open-ide";
+import { handleChat } from "./routes/chat";
 
 const STATIC_DIR = join(import.meta.dir, "../dist");
 const PORT = 51000;
@@ -98,6 +99,10 @@ const server = Bun.serve({
 
     if (pathname === "/api/open-ide") {
       return await handleOpenIDE(req);
+    }
+
+    if (pathname === "/api/chat") {
+      return await handleChat(req);
     }
 
     // Static files (Svelte build output)
