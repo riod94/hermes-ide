@@ -55,6 +55,7 @@ async function serveStatic(pathname: string): Promise<Response | null> {
 
 const server = Bun.serve({
   port: PORT,
+  idleTimeout: 120,
   hostname: "0.0.0.0",
 
   async fetch(req) {
