@@ -11,26 +11,13 @@
 
   let chatContainerEl: HTMLDivElement | undefined = $state();
   
-  // Diff Polling State
-  let pendingDiffs: any[] = $state([]);
-  let pollInterval: ReturnType<typeof setInterval>;
-
-  $effect(() => {
-    // Start polling the MCP Interceptor HTTP Server for pending diffs
-    pollInterval = setInterval(async () => {
-      try {
-        const res = await fetch('http://host.docker.internal:51500/api/diffs/pending');
-        if (res.ok) {
-          const data = await res.json();
-          pendingDiffs = data.pending || [];
-        }
-      } catch (err) {
-        // Silently ignore connection errors (server might be down)
-      }
-    }, 2000);
-
-    return () => clearInterval(pollInterval);
-  });
+  // Pending diffs dari MCP Server (via Extension Host postMessage)
+  let pendingDiffs: Array<{
+    id: string;
+    filepath: string;
+    original_content: string;
+    new_content: string;
+  }> = $state([]);
 
   // Auto-scroll to bottom when new messages arrive
   $effect(() => {
@@ -61,16 +48,10 @@
             isLoading.set(false);
           }
           break;
-        case 'triggerDiff':
-          // Menampilkan Pop-Up Alert secara native di Webview!
-          const diffMsg = msg as any;
-          const result = window.confirm(`Hermes proposes changes to ${diffMsg.filepath}. Do you want to review and apply them?`);
-          vscode.postMessage({ 
-            type: 'resolveDiff', 
-            action: result ? 'approve' : 'reject',
-            filepath: diffMsg.filepath,
-            newContent: diffMsg.newContent
-          });
+        case 'showPendingDiff':
+          // MCP Server mengirim diff proposal via Extension Host
+          const diffData = (msg as any).diff;
+          pendingDiffs = [...pendingDiffs, diffData];
           break;
         case 'clearMessages':
           clearMessages();
@@ -88,18 +69,21 @@
 
   function handleSend() {
     // ChatInput already posts the message via vscode.postMessage
-    // We add the user message locally for instant feedback
-    // The extension will echo it back or we handle it here
   }
 
   function handleClear() {
     clearMessages();
     vscode.postMessage({ type: 'clearChat' });
   }
+
+  // Callback ketika DiffAlert resolve (accept/reject) — hapus dari pending list
+  function handleDiffResolved(diffId: string) {
+    pendingDiffs = pendingDiffs.filter(d => d.id !== diffId);
+  }
 </script>
 
 <div class="flex flex-col h-screen overflow-hidden" style="background: var(--color-bg);">
-  <DiffAlert {pendingDiffs} />
+  <DiffAlert {pendingDiffs} onResolved={handleDiffResolved} />
   
   <!-- Header -->
   <ChatHeader onClear={handleClear} />

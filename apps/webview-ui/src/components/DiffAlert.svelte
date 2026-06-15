@@ -1,64 +1,66 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { vscode } from '../lib/vscode';
+  import type { PendingDiff } from '../lib/types';
 
-  export let pendingDiffs: Array<{
-    id: string;
-    filepath: string;
-    original_content: string;
-    new_content: string;
-  }> = [];
-
-  function handleApprove(diffId: string, filepath: string, newContent: string) {
-    vscode.postMessage({
-      type: 'resolveDiff',
-      value: { diffId, action: 'approve', filepath, newContent }
-    });
+  interface Props {
+    pendingDiffs?: PendingDiff[];
+    onResolved?: (diffId: string) => void;
   }
 
-  function handleReject(diffId: string) {
+  let { pendingDiffs = [], onResolved }: Props = $props();
+
+  function handleApprove(diff: PendingDiff) {
     vscode.postMessage({
       type: 'resolveDiff',
-      value: { diffId, action: 'reject' }
+      value: { diffId: diff.id, action: 'approve', filepath: diff.filepath, newContent: diff.new_content }
     });
+    onResolved?.(diff.id);
   }
 
-  function handleReview(filepath: string, originalContent: string, newContent: string) {
+  function handleReject(diff: PendingDiff) {
+    vscode.postMessage({
+      type: 'resolveDiff',
+      value: { diffId: diff.id, action: 'reject', filepath: diff.filepath }
+    });
+    onResolved?.(diff.id);
+  }
+
+  function handleReview(diff: PendingDiff) {
     vscode.postMessage({
       type: 'openDiff',
-      value: { filepath, originalContent, newContent }
+      value: { filepath: diff.filepath, originalContent: diff.original_content, newContent: diff.new_content }
     });
   }
 </script>
 
 {#if pendingDiffs.length > 0}
   <div class="fixed top-4 right-4 z-50 flex flex-col gap-2">
-    {#each pendingDiffs as diff}
+    {#each pendingDiffs as diff (diff.id)}
       <div class="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border)] shadow-lg rounded-md p-3 flex flex-col gap-2 w-72">
         <div class="flex items-center gap-2 text-sm font-semibold text-[var(--vscode-editor-foreground)]">
           <span class="codicon codicon-git-compare"></span>
-          Diff Proposal
+          ⚡ Diff Proposal
         </div>
         <div class="text-xs text-[var(--vscode-descriptionForeground)] truncate">
           {diff.filepath.split('/').pop()}
         </div>
         <div class="flex gap-2 mt-1">
           <button 
-            on:click={() => handleReview(diff.filepath, diff.original_content, diff.new_content)}
+            onclick={() => handleReview(diff)}
             class="flex-1 bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] px-2 py-1 rounded text-xs">
             Review Diff
           </button>
         </div>
         <div class="flex gap-2">
           <button 
-            on:click={() => handleApprove(diff.id, diff.filepath, diff.new_content)}
+            onclick={() => handleApprove(diff)}
             class="flex-1 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)] px-2 py-1 rounded text-xs">
-            Approve
+            ✅ Accept
           </button>
           <button 
-            on:click={() => handleReject(diff.id)}
+            onclick={() => handleReject(diff)}
             class="flex-1 bg-[var(--vscode-errorForeground)] text-white hover:opacity-80 px-2 py-1 rounded text-xs">
-            Reject
+            ❌ Reject
           </button>
         </div>
       </div>

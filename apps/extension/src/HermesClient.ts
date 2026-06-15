@@ -59,12 +59,10 @@ export class HermesClient {
                   
                   const data = JSON.parse(rawLine);
                   
-                  // CEGATAN DARI EXTENSION (NATIVE)
+                  // Tool call progress indicators
                   if (data.type === "response.output_item.added" && data.item?.type === "function_call") {
                     const toolName = data.item.name;
-                    if (toolName === "write_file" || toolName === "patch") {
-                       onChunk(`__HERMES_PROPOSE_DIFF__`);
-                    } else if (toolName === "search_files" || toolName === "read_file") {
+                    if (toolName === "search_files" || toolName === "read_file") {
                        onChunk(`\n> ⏳ **Exploring codebase...**\n`);
                     } else {
                        onChunk(`\n> ⏳ **Using tool: ${toolName}...**\n`);

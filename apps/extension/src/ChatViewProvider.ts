@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { HermesClient } from './HermesClient';
+import { mcpServerManager } from './mcpServer';
 
 // TextDocumentContentProvider for hermes-draft
 class HermesDraftProvider implements vscode.TextDocumentContentProvider {
@@ -10,8 +11,16 @@ class HermesDraftProvider implements vscode.TextDocumentContentProvider {
   }
 
   public provideTextDocumentContent(uri: vscode.Uri): string {
-    // uri is something like hermes-draft:/path/to/file
+    // Support dua cara: via Map (openDiff manual) dan via query param (MCP propose)
     const filepath = uri.path;
+    
+    // Cek dari query param dulu (dari MCP server)
+    const params = new URLSearchParams(uri.query);
+    const contentFromQuery = params.get('content');
+    if (contentFromQuery) {
+      return contentFromQuery;
+    }
+
     return this._drafts.get(filepath) || '';
   }
 }
@@ -50,16 +59,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           this._handleChatMessage(data.value);
           break;
         case 'resolveDiff':
-          if (data.action === "approve") {
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(vscode.Uri.file(data.filepath), new vscode.Range(0, 0, 99999, 99999), data.newContent);
-            vscode.workspace.applyEdit(edit).then(success => {
-              if (success) {
-                vscode.window.showInformationMessage("Diff Applied!");
-                // optionally close diff tab
-              }
-            });
-          }
+          this._handleResolveDiff(data.value);
           break;
         case 'clearChat':
           // Future: persist clear state
@@ -74,16 +74,35 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'openDiff':
           this._handleOpenDiff(data.value);
           break;
-        case 'resolveDiff':
-          this._handleResolveDiff(data.value);
-          break;
       }
+    });
+
+    // Register command handler untuk menerima event dari MCP Server
+    vscode.commands.registerCommand('hermes.showDiffControls', (payload: {
+      diffId: string;
+      filepath: string;
+      new_content: string;
+    }) => {
+      this._showDiffInWebview(payload);
     });
   }
 
   /** Send a message to the webview */
   public postMessage(message: unknown) {
     this._view?.webview.postMessage(message);
+  }
+
+  /** Kirim pending diff ke Webview UI untuk ditampilkan sebagai DiffAlert */
+  private _showDiffInWebview(payload: { diffId: string; filepath: string; new_content: string }) {
+    this.postMessage({
+      type: 'showPendingDiff',
+      diff: {
+        id: payload.diffId,
+        filepath: payload.filepath,
+        original_content: '', // MCP server sudah baca original, webview hanya perlu filepath
+        new_content: payload.new_content,
+      },
+    });
   }
 
   /** Handle opening Diff view in VS Code */
@@ -108,33 +127,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** Handle user Approve/Reject action on diff */
+  /** Handle user Approve/Reject action — sekarang langsung resolve via MCP Server Manager */
   private async _handleResolveDiff(payload: { diffId: string, action: 'approve' | 'reject', filepath?: string, newContent?: string }) {
     try {
-      // If approved, write to real file system first
-      if (payload.action === 'approve' && payload.filepath && payload.newContent !== undefined) {
-        const fileUri = vscode.Uri.file(payload.filepath);
-        const encoder = new TextEncoder();
-        await vscode.workspace.fs.writeFile(fileUri, encoder.encode(payload.newContent));
-        vscode.window.showInformationMessage(`Hermes: Applied changes to ${payload.filepath.split('/').pop()}`);
-        
-        // Close the diff tab automatically
+      // Resolve langsung ke MCP Server Manager (in-process, tidak perlu HTTP)
+      mcpServerManager.resolveDiff(payload.diffId, payload.action);
+
+      if (payload.action === 'approve') {
+        vscode.window.showInformationMessage(`Hermes: Approved changes to ${payload.filepath?.split('/').pop() || 'file'}`);
+        // Close diff tab
         await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-      }
-
-      // Notify the MCP Interceptor
-      const res = await globalThis.fetch(`http://host.docker.internal:51500/api/diffs/${payload.diffId}/resolve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: payload.action })
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to resolve on Interceptor API. Status: ${res.status}`);
+      } else {
+        vscode.window.showWarningMessage(`Hermes: Rejected changes to ${payload.filepath?.split('/').pop() || 'file'}`);
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
       }
     } catch (e) {
       console.error('[Hermes] Failed to resolve diff', e);
-      vscode.window.showErrorMessage('Hermes: Failed to notify agent about diff resolution.');
+      vscode.window.showErrorMessage('Hermes: Failed to resolve diff.');
     }
   }
 
@@ -199,20 +208,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     let fullContent = '';
     try {
       await this._hermesClient.streamChat(text, contextString, (chunk: string) => {
-        // CEGATAN: Tangkap perintah "__HERMES_PROPOSE_DIFF__" dari Client
-        if (chunk === "__HERMES_PROPOSE_DIFF__") {
-          // Beri tahu Svelte UI untuk merender alert Diff!
-          this.postMessage({
-            type: 'triggerDiff',
-            filepath: editor?.document.uri.fsPath || "workspace-file",
-            // Ideally LLM akan memberikan isi diff-nya, tapi untuk saat ini:
-            // kita hardcode dummy diff sebagai proof of concept
-            originalContent: editor?.document.getText() || "",
-            newContent: (editor?.document.getText() || "") + "\n// Proposed by Hermes"
-          });
-          return;
-        }
-
         fullContent += chunk;
         this.postMessage({
           type: 'updateMessage',

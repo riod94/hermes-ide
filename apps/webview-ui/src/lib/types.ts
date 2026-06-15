@@ -21,9 +21,18 @@ export type OutgoingMessage =
   | { type: 'copyCode'; value: string }
   | { type: 'ready' };
 
+/** Pending diff proposal dari MCP Server */
+export interface PendingDiff {
+  id: string;
+  filepath: string;
+  original_content: string;
+  new_content: string;
+}
+
 /** Message types sent from extension to webview */
 export type IncomingMessage =
   | { type: 'addMessage'; message: ChatMessage }
   | { type: 'updateMessage'; id: string; content: string; status?: ChatMessage['status'] }
   | { type: 'clearMessages' }
-  | { type: 'setProfile'; name: string; role: string };
+  | { type: 'setProfile'; name: string; role: string }
+  | { type: 'showPendingDiff'; diff: PendingDiff };

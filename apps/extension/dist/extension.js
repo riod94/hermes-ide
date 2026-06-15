@@ -6908,7 +6908,7 @@ module.exports = __toCommonJS(extension_exports);
 var vscode3 = __toESM(require("vscode"));
 
 // src/ChatViewProvider.ts
-var vscode = __toESM(require("vscode"));
+var vscode2 = __toESM(require("vscode"));
 
 // src/HermesClient.ts
 var HermesClient = class {
@@ -6967,9 +6967,7 @@ User: ${message}` : message;
                   const data = JSON.parse(rawLine);
                   if (data.type === "response.output_item.added" && data.item?.type === "function_call") {
                     const toolName = data.item.name;
-                    if (toolName === "write_file" || toolName === "patch") {
-                      onChunk(`__HERMES_PROPOSE_DIFF__`);
-                    } else if (toolName === "search_files" || toolName === "read_file") {
+                    if (toolName === "search_files" || toolName === "read_file") {
                       onChunk(`
 > \u23F3 **Exploring codebase...**
 `);
@@ -7037,236 +7035,6 @@ User: ${message}` : message;
     }
   }
 };
-
-// src/ChatViewProvider.ts
-var HermesDraftProvider = class {
-  _drafts = /* @__PURE__ */ new Map();
-  setDraft(filepath, content) {
-    this._drafts.set(filepath, content);
-  }
-  provideTextDocumentContent(uri) {
-    const filepath = uri.path;
-    return this._drafts.get(filepath) || "";
-  }
-};
-var draftProvider = new HermesDraftProvider();
-var ChatViewProvider = class {
-  constructor(_extensionUri) {
-    this._extensionUri = _extensionUri;
-    this._hermesClient = new HermesClient();
-  }
-  static viewType = "hermes.chatView";
-  _view;
-  _hermesClient;
-  resolveWebviewView(webviewView, context, _token) {
-    this._view = webviewView;
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this._extensionUri, "webview-dist")
-      ]
-    };
-    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-    webviewView.webview.onDidReceiveMessage((data) => {
-      switch (data.type) {
-        case "chatMessage":
-          this._handleChatMessage(data.value);
-          break;
-        case "resolveDiff":
-          if (data.action === "approve") {
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(vscode.Uri.file(data.filepath), new vscode.Range(0, 0, 99999, 99999), data.newContent);
-            vscode.workspace.applyEdit(edit).then((success) => {
-              if (success) {
-                vscode.window.showInformationMessage("Diff Applied!");
-              }
-            });
-          }
-          break;
-        case "clearChat":
-          break;
-        case "copyCode":
-          vscode.env.clipboard.writeText(data.value);
-          vscode.window.showInformationMessage("Code copied to clipboard");
-          break;
-        case "ready":
-          console.log("[Hermes] Webview ready");
-          break;
-        case "openDiff":
-          this._handleOpenDiff(data.value);
-          break;
-        case "resolveDiff":
-          this._handleResolveDiff(data.value);
-          break;
-      }
-    });
-  }
-  /** Send a message to the webview */
-  postMessage(message) {
-    this._view?.webview.postMessage(message);
-  }
-  /** Handle opening Diff view in VS Code */
-  async _handleOpenDiff(payload) {
-    try {
-      const originalUri = vscode.Uri.file(payload.filepath);
-      draftProvider.setDraft(payload.filepath, payload.newContent);
-      const draftUri = vscode.Uri.parse(`hermes-draft:${payload.filepath}`);
-      await vscode.commands.executeCommand(
-        "vscode.diff",
-        originalUri,
-        draftUri,
-        `Review Draft: ${payload.filepath.split("/").pop()}`,
-        { preview: true }
-      );
-    } catch (e) {
-      console.error("[Hermes] Failed to open diff", e);
-      vscode.window.showErrorMessage("Hermes: Failed to open Diff view.");
-    }
-  }
-  /** Handle user Approve/Reject action on diff */
-  async _handleResolveDiff(payload) {
-    try {
-      if (payload.action === "approve" && payload.filepath && payload.newContent !== void 0) {
-        const fileUri = vscode.Uri.file(payload.filepath);
-        const encoder = new TextEncoder();
-        await vscode.workspace.fs.writeFile(fileUri, encoder.encode(payload.newContent));
-        vscode.window.showInformationMessage(`Hermes: Applied changes to ${payload.filepath.split("/").pop()}`);
-        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
-      }
-      const res = await globalThis.fetch(`http://host.docker.internal:51500/api/diffs/${payload.diffId}/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: payload.action })
-      });
-      if (!res.ok) {
-        throw new Error(`Failed to resolve on Interceptor API. Status: ${res.status}`);
-      }
-    } catch (e) {
-      console.error("[Hermes] Failed to resolve diff", e);
-      vscode.window.showErrorMessage("Hermes: Failed to notify agent about diff resolution.");
-    }
-  }
-  /** Handle incoming chat message from user */
-  async _handleChatMessage(text) {
-    this.postMessage({
-      type: "addMessage",
-      message: {
-        id: `msg-${Date.now()}-user`,
-        role: "user",
-        content: text,
-        timestamp: Date.now(),
-        status: "done"
-      }
-    });
-    const responseId = `msg-${Date.now()}-assistant`;
-    this.postMessage({
-      type: "addMessage",
-      message: {
-        id: responseId,
-        role: "assistant",
-        content: "",
-        timestamp: Date.now(),
-        status: "streaming"
-      }
-    });
-    const editor = vscode.window.activeTextEditor;
-    let contextString = "";
-    if (editor) {
-      const doc = editor.document;
-      const selections = editor.selections;
-      const selectedText = selections.map((s) => doc.getText(s)).join("\n").trim();
-      contextString += `Active File: ${vscode.workspace.asRelativePath(doc.uri)}
-`;
-      if (selectedText) {
-        contextString += `Selected Code:
-\`\`\`
-${selectedText}
-\`\`\`
-`;
-      }
-      const diagnostics = vscode.languages.getDiagnostics(doc.uri);
-      if (diagnostics.length > 0) {
-        const errors = diagnostics.filter((d) => d.severity === vscode.DiagnosticSeverity.Error).map((d) => `- Line ${d.range.start.line + 1}: ${d.message}`).join("\n");
-        if (errors) {
-          contextString += `Current Linter Errors:
-${errors}
-`;
-        }
-      }
-    }
-    let fullContent = "";
-    try {
-      await this._hermesClient.streamChat(text, contextString, (chunk) => {
-        if (chunk === "__HERMES_PROPOSE_DIFF__") {
-          this.postMessage({
-            type: "triggerDiff",
-            filepath: editor?.document.uri.fsPath || "workspace-file",
-            // Ideally LLM akan memberikan isi diff-nya, tapi untuk saat ini:
-            // kita hardcode dummy diff sebagai proof of concept
-            originalContent: editor?.document.getText() || "",
-            newContent: (editor?.document.getText() || "") + "\n// Proposed by Hermes"
-          });
-          return;
-        }
-        fullContent += chunk;
-        this.postMessage({
-          type: "updateMessage",
-          id: responseId,
-          content: fullContent,
-          status: "streaming"
-        });
-      });
-    } catch (e) {
-      console.error(e);
-      fullContent += `
-
-Error: ${e.message}`;
-    }
-    this.postMessage({
-      type: "updateMessage",
-      id: responseId,
-      content: fullContent,
-      status: "done"
-    });
-  }
-  _getHtmlForWebview(webview) {
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, "webview-dist", "index.js")
-    );
-    const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, "webview-dist", "index.css")
-    );
-    const nonce = getNonce();
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none';
-                 style-src ${webview.cspSource} 'unsafe-inline';
-                 script-src 'nonce-${nonce}';
-                 font-src ${webview.cspSource};
-                 img-src ${webview.cspSource} https: data:;
-                 trusted-types svelte-trusted-html;">
-  <title>Hermes Chat</title>
-  <link rel="stylesheet" href="${styleUri}">
-</head>
-<body>
-  <div id="app"></div>
-  <script nonce="${nonce}" src="${scriptUri}"></script>
-</body>
-</html>`;
-  }
-};
-function getNonce() {
-  let text = "";
-  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  for (let i = 0; i < 32; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-  }
-  return text;
-}
 
 // ../../node_modules/.bun/zod@4.4.3/node_modules/zod/v4/core/core.js
 var _a;
@@ -18502,7 +18270,7 @@ var cors = (options) => {
 };
 
 // src/mcpServer.ts
-var vscode2 = __toESM(require("vscode"));
+var vscode = __toESM(require("vscode"));
 var MCPServerManager = class {
   mcpServer;
   transport;
@@ -18562,25 +18330,25 @@ var MCPServerManager = class {
       }
       const { filepath, new_content } = request.params.arguments;
       try {
-        const originalUri = vscode2.Uri.file(filepath);
+        const originalUri = vscode.Uri.file(filepath);
         let originalContent = "";
         try {
-          const doc = await vscode2.workspace.openTextDocument(originalUri);
+          const doc = await vscode.workspace.openTextDocument(originalUri);
           originalContent = doc.getText();
         } catch {
           console.log(`File ${filepath} not found, treating as new file.`);
         }
-        const draftUri = vscode2.Uri.parse(
+        const draftUri = vscode.Uri.parse(
           `hermes-draft:${filepath}?content=${encodeURIComponent(new_content)}`
         );
         const diffId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        await vscode2.commands.executeCommand(
+        await vscode.commands.executeCommand(
           "vscode.diff",
           originalUri,
           draftUri,
           `Propose: ${filepath.split("/").pop()}`
         );
-        vscode2.commands.executeCommand("hermes.showDiffControls", {
+        vscode.commands.executeCommand("hermes.showDiffControls", {
           diffId,
           filepath,
           new_content
@@ -18589,7 +18357,7 @@ var MCPServerManager = class {
           this.pendingDiffResolvers.set(diffId, { resolve });
         });
         if (decision === "accept") {
-          await vscode2.workspace.fs.writeFile(
+          await vscode.workspace.fs.writeFile(
             originalUri,
             Buffer.from(new_content, "utf-8")
           );
@@ -18648,6 +18416,228 @@ var MCPServerManager = class {
   }
 };
 var mcpServerManager = new MCPServerManager();
+
+// src/ChatViewProvider.ts
+var HermesDraftProvider = class {
+  _drafts = /* @__PURE__ */ new Map();
+  setDraft(filepath, content) {
+    this._drafts.set(filepath, content);
+  }
+  provideTextDocumentContent(uri) {
+    const filepath = uri.path;
+    const params = new URLSearchParams(uri.query);
+    const contentFromQuery = params.get("content");
+    if (contentFromQuery) {
+      return contentFromQuery;
+    }
+    return this._drafts.get(filepath) || "";
+  }
+};
+var draftProvider = new HermesDraftProvider();
+var ChatViewProvider = class {
+  constructor(_extensionUri) {
+    this._extensionUri = _extensionUri;
+    this._hermesClient = new HermesClient();
+  }
+  static viewType = "hermes.chatView";
+  _view;
+  _hermesClient;
+  resolveWebviewView(webviewView, context, _token) {
+    this._view = webviewView;
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [
+        vscode2.Uri.joinPath(this._extensionUri, "webview-dist")
+      ]
+    };
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    webviewView.webview.onDidReceiveMessage((data) => {
+      switch (data.type) {
+        case "chatMessage":
+          this._handleChatMessage(data.value);
+          break;
+        case "resolveDiff":
+          this._handleResolveDiff(data.value);
+          break;
+        case "clearChat":
+          break;
+        case "copyCode":
+          vscode2.env.clipboard.writeText(data.value);
+          vscode2.window.showInformationMessage("Code copied to clipboard");
+          break;
+        case "ready":
+          console.log("[Hermes] Webview ready");
+          break;
+        case "openDiff":
+          this._handleOpenDiff(data.value);
+          break;
+      }
+    });
+    vscode2.commands.registerCommand("hermes.showDiffControls", (payload) => {
+      this._showDiffInWebview(payload);
+    });
+  }
+  /** Send a message to the webview */
+  postMessage(message) {
+    this._view?.webview.postMessage(message);
+  }
+  /** Kirim pending diff ke Webview UI untuk ditampilkan sebagai DiffAlert */
+  _showDiffInWebview(payload) {
+    this.postMessage({
+      type: "showPendingDiff",
+      diff: {
+        id: payload.diffId,
+        filepath: payload.filepath,
+        original_content: "",
+        // MCP server sudah baca original, webview hanya perlu filepath
+        new_content: payload.new_content
+      }
+    });
+  }
+  /** Handle opening Diff view in VS Code */
+  async _handleOpenDiff(payload) {
+    try {
+      const originalUri = vscode2.Uri.file(payload.filepath);
+      draftProvider.setDraft(payload.filepath, payload.newContent);
+      const draftUri = vscode2.Uri.parse(`hermes-draft:${payload.filepath}`);
+      await vscode2.commands.executeCommand(
+        "vscode.diff",
+        originalUri,
+        draftUri,
+        `Review Draft: ${payload.filepath.split("/").pop()}`,
+        { preview: true }
+      );
+    } catch (e) {
+      console.error("[Hermes] Failed to open diff", e);
+      vscode2.window.showErrorMessage("Hermes: Failed to open Diff view.");
+    }
+  }
+  /** Handle user Approve/Reject action — sekarang langsung resolve via MCP Server Manager */
+  async _handleResolveDiff(payload) {
+    try {
+      mcpServerManager.resolveDiff(payload.diffId, payload.action);
+      if (payload.action === "approve") {
+        vscode2.window.showInformationMessage(`Hermes: Approved changes to ${payload.filepath?.split("/").pop() || "file"}`);
+        await vscode2.commands.executeCommand("workbench.action.closeActiveEditor");
+      } else {
+        vscode2.window.showWarningMessage(`Hermes: Rejected changes to ${payload.filepath?.split("/").pop() || "file"}`);
+        await vscode2.commands.executeCommand("workbench.action.closeActiveEditor");
+      }
+    } catch (e) {
+      console.error("[Hermes] Failed to resolve diff", e);
+      vscode2.window.showErrorMessage("Hermes: Failed to resolve diff.");
+    }
+  }
+  /** Handle incoming chat message from user */
+  async _handleChatMessage(text) {
+    this.postMessage({
+      type: "addMessage",
+      message: {
+        id: `msg-${Date.now()}-user`,
+        role: "user",
+        content: text,
+        timestamp: Date.now(),
+        status: "done"
+      }
+    });
+    const responseId = `msg-${Date.now()}-assistant`;
+    this.postMessage({
+      type: "addMessage",
+      message: {
+        id: responseId,
+        role: "assistant",
+        content: "",
+        timestamp: Date.now(),
+        status: "streaming"
+      }
+    });
+    const editor = vscode2.window.activeTextEditor;
+    let contextString = "";
+    if (editor) {
+      const doc = editor.document;
+      const selections = editor.selections;
+      const selectedText = selections.map((s) => doc.getText(s)).join("\n").trim();
+      contextString += `Active File: ${vscode2.workspace.asRelativePath(doc.uri)}
+`;
+      if (selectedText) {
+        contextString += `Selected Code:
+\`\`\`
+${selectedText}
+\`\`\`
+`;
+      }
+      const diagnostics = vscode2.languages.getDiagnostics(doc.uri);
+      if (diagnostics.length > 0) {
+        const errors = diagnostics.filter((d) => d.severity === vscode2.DiagnosticSeverity.Error).map((d) => `- Line ${d.range.start.line + 1}: ${d.message}`).join("\n");
+        if (errors) {
+          contextString += `Current Linter Errors:
+${errors}
+`;
+        }
+      }
+    }
+    let fullContent = "";
+    try {
+      await this._hermesClient.streamChat(text, contextString, (chunk) => {
+        fullContent += chunk;
+        this.postMessage({
+          type: "updateMessage",
+          id: responseId,
+          content: fullContent,
+          status: "streaming"
+        });
+      });
+    } catch (e) {
+      console.error(e);
+      fullContent += `
+
+Error: ${e.message}`;
+    }
+    this.postMessage({
+      type: "updateMessage",
+      id: responseId,
+      content: fullContent,
+      status: "done"
+    });
+  }
+  _getHtmlForWebview(webview) {
+    const scriptUri = webview.asWebviewUri(
+      vscode2.Uri.joinPath(this._extensionUri, "webview-dist", "index.js")
+    );
+    const styleUri = webview.asWebviewUri(
+      vscode2.Uri.joinPath(this._extensionUri, "webview-dist", "index.css")
+    );
+    const nonce = getNonce();
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 style-src ${webview.cspSource} 'unsafe-inline';
+                 script-src 'nonce-${nonce}';
+                 font-src ${webview.cspSource};
+                 img-src ${webview.cspSource} https: data:;
+                 trusted-types svelte-trusted-html;">
+  <title>Hermes Chat</title>
+  <link rel="stylesheet" href="${styleUri}">
+</head>
+<body>
+  <div id="app"></div>
+  <script nonce="${nonce}" src="${scriptUri}"></script>
+</body>
+</html>`;
+  }
+};
+function getNonce() {
+  let text = "";
+  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
+}
 
 // src/extension.ts
 function activate(context) {
