@@ -9,3 +9,6 @@ tsconfig.json
 **/*.map
 esbuild.js
 bun.lock
+.git/**
+apps/code-server-infra/**
+dist/mcpStandalone.ts

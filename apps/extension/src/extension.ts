@@ -21,8 +21,8 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Start MCP Server (async, fire-and-forget with error logging)
-  mcpServerManager.start().catch((err) => {
+  // Start MCP Server as standalone Bun subprocess
+  mcpServerManager.start(context.extensionPath).catch((err) => {
     console.error('Failed to start MCP Server:', err);
     vscode.window.showErrorMessage(`Hermes MCP Server failed to start: ${err.message}`);
   });

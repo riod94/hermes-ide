@@ -46,6 +46,7 @@ export function generateDockerCompose(store: ProfileStore): string {
       - /home/ade/projects/${profile.name}:/projects
       - ./config-${profile.name}:/config
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
+      - /home/ade/.bun/bin/bun:/usr/local/bin/bun:ro
     ports:
       - "${profile.port}:8443"
       - "127.0.0.1:${mcpHostPort}:${MCP_SERVER_PORT}"

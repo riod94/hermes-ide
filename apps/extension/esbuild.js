@@ -1,4 +1,6 @@
 const esbuild = require('esbuild');
+const fs = require('fs');
+const path = require('path');
 
 const production = process.argv.includes('--minify');
 const watch = process.argv.includes('--watch');
@@ -39,6 +41,27 @@ async function main() {
 			esbuildProblemMatcherPlugin,
 		],
 	});
+
+	// Bundle mcpStandalone.ts as standalone Bun executable (single file, no external deps)
+	const standaloneCtx = await esbuild.context({
+		entryPoints: ['src/mcpStandalone.ts'],
+		bundle: true,
+		format: 'esm',
+		minify: production,
+		sourcemap: false,
+		platform: 'node', // compatible with Bun (superset of Node)
+		outfile: 'dist/mcpStandalone.js',
+		external: [], // bundle everything — no node_modules needed at runtime
+		target: 'esnext',
+		logLevel: 'silent',
+		banner: {
+			js: '// Standalone MCP Server — run with: bun run mcpStandalone.js',
+		},
+	});
+	await standaloneCtx.rebuild();
+	await standaloneCtx.dispose();
+	console.log('[build] Bundled mcpStandalone.js (standalone Bun)');
+
 	if (watch) {
 		await ctx.watch();
 	} else {

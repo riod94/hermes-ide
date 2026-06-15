@@ -4,6 +4,10 @@
   }
 
   let { onClear }: Props = $props();
+
+  // __APP_VERSION__ is replaced at build time by Vite define
+  // @ts-ignore
+  const version: string = __APP_VERSION__;
 </script>
 
 <header class="flex items-center justify-between px-3 py-2 border-b"
@@ -16,7 +20,7 @@
     <div>
       <div class="flex items-center gap-1.5">
         <h1 class="text-[13px] font-semibold leading-tight" style="color: var(--color-fg);">Hermes AI</h1>
-        <span class="text-[9px] px-1 rounded-sm" style="background: var(--color-input-bg); color: var(--color-muted); border: 1px solid var(--color-border);">v0.2.6</span>
+        <span class="text-[9px] px-1 rounded-sm" style="background: var(--color-input-bg); color: var(--color-muted); border: 1px solid var(--color-border);">v{version}</span>
       </div>
       <p class="text-[10px] leading-tight" style="color: var(--color-muted);">Agentic Coding Assistant</p>
     </div>
