@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import { join } from "path";
+import * as fs from "fs";
 
 export class MCPServerManager {
   private child: ChildProcess | null = null;
@@ -178,7 +179,13 @@ export class MCPServerManager {
 
     // Open VS Code diff editor
     try {
-      const originalUri = vscode.Uri.file(msg.filepath);
+      let originalUri = vscode.Uri.file(msg.filepath);
+      
+      // Jika file asli belum exist (Create File), vscode.diff akan gagal jika memanggil vscode.Uri.file
+      // Solusi: Gunakan provider virtual untuk sisi kiri (original) yang isinya kosong
+      if (!fs.existsSync(msg.filepath)) {
+        originalUri = vscode.Uri.parse(`hermes-draft:${msg.filepath}?content=`);
+      }
 
       // Create draft URI for diff view
       const draftUri = vscode.Uri.parse(
