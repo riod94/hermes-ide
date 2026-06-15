@@ -1,4 +1,4 @@
-import { writeFileSync } from "fs";
+import { writeFileSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type { ProfileStore } from "./store";
 
@@ -17,6 +17,7 @@ const SSL_KEY = "/etc/letsencrypt/live/app.dev.nusa.work-0001/privkey.pem";
 const AUTH_PORTAL_PORT = 51000;
 
 const CODE_SERVER_IMAGE = "lscr.io/linuxserver/code-server:latest";
+const MCP_SERVER_PORT = 51600; // Port MCP server di dalam Extension Host
 
 export function generateDockerCompose(store: ProfileStore): string {
   const services: string[] = [];
@@ -24,6 +25,7 @@ export function generateDockerCompose(store: ProfileStore): string {
   for (const profile of store.profiles) {
     const serviceName = `hermes-ide-${profile.name}`;
     const apiPort = profile.port + 10000;
+    const mcpHostPort = profile.port + 20000; // MCP port: code-server port + 20000
     
     services.push(`  ${serviceName}:
     image: ${CODE_SERVER_IMAGE}
@@ -42,6 +44,7 @@ export function generateDockerCompose(store: ProfileStore): string {
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "${profile.port}:8443"
+      - "${mcpHostPort}:${MCP_SERVER_PORT}"
     networks:
       - hermes-ide-net
     restart: unless-stopped`);
@@ -266,4 +269,83 @@ export async function reloadNginx(): Promise<{ success: boolean; output: string 
 /** Get the HTTPS IDE URL for a profile */
 export function getIdeUrl(profileName: string): string {
   return `https://ide-${profileName}.${IDE_DOMAIN}/`;
+}
+
+// ─────────────────────────────────────────────
+// MCP config injection ke Hermes profiles
+// ─────────────────────────────────────────────
+
+const HERMES_PROFILES_DIR = "/home/ade/.hermes/profiles";
+
+/**
+ * Inject konfigurasi MCP server `ide` ke config.yaml profil Hermes.
+ * 
+ * Format yang di-inject:
+ * ```yaml
+ * mcp_servers:
+ *   ide:
+ *     url: "http://127.0.0.1:{mcpHostPort}/mcp"
+ *     timeout: 300
+ * ```
+ * 
+ * Jika config.yaml sudah punya `mcp_servers`, kita hanya tambah/update entry `ide`.
+ * Jika belum ada config.yaml, buat minimal config.
+ */
+export function injectMcpConfig(store: ProfileStore): { success: number; total: number; details: string[] } {
+  const details: string[] = [];
+  let success = 0;
+
+  for (const profile of store.profiles) {
+    const profileDir = join(HERMES_PROFILES_DIR, profile.name);
+    const configPath = join(profileDir, "config.yaml");
+    const mcpHostPort = profile.port + 20000;
+    const mcpUrl = `http://127.0.0.1:${mcpHostPort}/mcp`;
+
+    try {
+      let configContent = "";
+      
+      if (existsSync(configPath)) {
+        configContent = readFileSync(configPath, "utf-8");
+      }
+
+      // Cek apakah sudah ada mcp_servers.ide entry
+      const ideEntryRegex = /^(\s*)ide:\s*\n\s+url:\s*"[^"]*"/m;
+      const mcpServersRegex = /^mcp_servers:\s*$/m;
+
+      const newIdeBlock = `  ide:\n    url: "${mcpUrl}"\n    timeout: 300`;
+
+      if (ideEntryRegex.test(configContent)) {
+        // Update existing ide entry — replace url line
+        configContent = configContent.replace(
+          /(\s*)ide:\s*\n\s+url:\s*"[^"]*"\n\s+timeout:\s*\d+/m,
+          `  ide:\n    url: "${mcpUrl}"\n    timeout: 300`
+        );
+        details.push(`${profile.name}: updated existing MCP ide config`);
+      } else if (mcpServersRegex.test(configContent)) {
+        // mcp_servers key exists, tapi belum ada ide entry — tambahkan
+        configContent = configContent.replace(
+          /^(mcp_servers:\s*)$/m,
+          `mcp_servers:\n${newIdeBlock}`
+        );
+        details.push(`${profile.name}: added ide entry to existing mcp_servers`);
+      } else {
+        // Belum ada mcp_servers sama sekali — append di akhir
+        const mcpBlock = `\nmcp_servers:\n${newIdeBlock}\n`;
+        configContent = configContent.trimEnd() + "\n" + mcpBlock;
+        details.push(`${profile.name}: appended new mcp_servers section`);
+      }
+
+      writeFileSync(configPath, configContent);
+      success++;
+    } catch (e: any) {
+      details.push(`${profile.name}: FAILED — ${e.message}`);
+    }
+  }
+
+  return { success, total: store.profiles.length, details };
+}
+
+/** Get MCP host port for a profile */
+export function getMcpHostPort(profile: { port: number }): number {
+  return profile.port + 20000;
 }

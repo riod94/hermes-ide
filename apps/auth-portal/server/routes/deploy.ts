@@ -1,5 +1,5 @@
 import { loadStore, saveStore } from "../lib/store";
-import { writeDockerCompose, restartContainers, writeNginxConfig, reloadNginx, installExtensionOnContainer } from "../lib/docker";
+import { writeDockerCompose, restartContainers, writeNginxConfig, reloadNginx, installExtensionOnContainer, injectMcpConfig } from "../lib/docker";
 
 function authenticate(req: Request): { authorized: boolean; role?: string } {
   const auth = req.headers.get("x-auth");
@@ -47,6 +47,9 @@ export async function handleDeploy(req: Request): Promise<Response> {
       if (ok) extSuccessCount++;
     }
 
+    // 5. Inject MCP config ke Hermes profiles
+    const mcpResult = injectMcpConfig(store);
+
     return Response.json({
       success: result.success,
       message: result.success
@@ -60,6 +63,11 @@ export async function handleDeploy(req: Request): Promise<Response> {
       extension: {
         success: extSuccessCount === store.profiles.length,
         message: `Extension installed in ${extSuccessCount}/${store.profiles.length} containers`
+      },
+      mcp: {
+        success: mcpResult.success === mcpResult.total,
+        message: `MCP config injected in ${mcpResult.success}/${mcpResult.total} profiles`,
+        details: mcpResult.details,
       }
     });
   } catch (e: any) {
