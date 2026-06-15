@@ -1,5 +1,5 @@
 import { loadStore, saveStore } from "../lib/store";
-import { writeDockerCompose, restartContainers, writeNginxConfig, reloadNginx, installExtensionOnContainer, injectMcpConfig } from "../lib/docker";
+import { writeDockerCompose, restartContainers, restartContainer, writeNginxConfig, reloadNginx, installExtensionOnContainer, injectMcpConfig } from "../lib/docker";
 
 function authenticate(req: Request): { authorized: boolean; role?: string } {
   const auth = req.headers.get("x-auth");
@@ -47,7 +47,14 @@ export async function handleDeploy(req: Request): Promise<Response> {
       if (ok) extSuccessCount++;
     }
 
-    // 5. Inject MCP config ke Hermes profiles
+    // 5. Restart containers agar code-server load extension baru
+    for (const profile of store.profiles) {
+      await restartContainer(`hermes-ide-${profile.name}`);
+    }
+    // Tunggu containers ready sebelum inject MCP config
+    await new Promise(r => setTimeout(r, 3000));
+
+    // 6. Inject MCP config ke Hermes profiles
     const mcpResult = injectMcpConfig(store);
 
     return Response.json({
