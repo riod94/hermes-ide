@@ -23,7 +23,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51001:8443"
-      - "127.0.0.1:56001:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -45,7 +44,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51002:8443"
-      - "127.0.0.1:56002:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -67,7 +65,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51003:8443"
-      - "127.0.0.1:56003:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -89,7 +86,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51004:8443"
-      - "127.0.0.1:56004:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -111,7 +107,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51005:8443"
-      - "127.0.0.1:56005:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -133,7 +128,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51006:8443"
-      - "127.0.0.1:56006:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -155,7 +149,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51007:8443"
-      - "127.0.0.1:56007:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -177,7 +170,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51008:8443"
-      - "127.0.0.1:56008:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -199,7 +191,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51009:8443"
-      - "127.0.0.1:56009:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -221,7 +212,6 @@ services:
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51010:8443"
-      - "127.0.0.1:56010:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped

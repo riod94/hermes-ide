@@ -1,0 +1,23 @@
+[Unit]
+Description=Hermes MCP Service for profile %i
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=ade
+Group=ade
+WorkingDirectory=/home/ade/projects/rio/hermes-ide-extension/apps/mcp-service
+ExecStart=/home/ade/.bun/bin/bun run dist/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mcp-hermes-%i
+
+# Environment — overridden per-instance by drop-in or env file
+Environment=MCP_PROFILE=%i
+EnvironmentFile=-/etc/hermes-mcp/%i.env
+
+[Install]
+WantedBy=multi-user.target
