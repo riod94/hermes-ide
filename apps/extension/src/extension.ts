@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ChatViewProvider, draftProvider } from './ChatViewProvider';
+import { mcpServerManager } from './mcpServer';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Hermes Extension activated');
@@ -17,6 +18,20 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('hermes.focus', () => {
       vscode.commands.executeCommand('workbench.view.extension.hermes-sidebar');
+    })
+  );
+
+  // Start MCP Server (async, fire-and-forget with error logging)
+  mcpServerManager.start().catch((err) => {
+    console.error('Failed to start MCP Server:', err);
+    vscode.window.showErrorMessage(`Hermes MCP Server failed to start: ${err.message}`);
+  });
+  context.subscriptions.push({ dispose: () => mcpServerManager.stop() });
+
+  // Register internal command untuk webview mengkonfirmasi diff
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hermes.resolveDiff', (diffId: string, decision: 'accept' | 'reject') => {
+      mcpServerManager.resolveDiff(diffId, decision);
     })
   );
 }

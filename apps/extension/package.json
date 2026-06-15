@@ -40,6 +40,16 @@
         "command": "hermes.focus",
         "title": "Hermes: Focus Chat",
         "category": "Hermes"
+      },
+      {
+        "command": "hermes.resolveDiff",
+        "title": "Hermes: Resolve Diff (Accept/Reject)",
+        "category": "Hermes"
+      },
+      {
+        "command": "hermes.showDiffControls",
+        "title": "Hermes: Show Diff Controls",
+        "category": "Hermes"
       }
     ]
   },
@@ -50,9 +60,13 @@
     "esbuild-base": "node esbuild.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.80.0",
     "@types/node": "20.x",
+    "@types/vscode": "^1.80.0",
     "esbuild": "^0.20.0",
     "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "hono": "^4.12.25"
   }
 }

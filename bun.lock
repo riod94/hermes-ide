@@ -30,26 +30,16 @@
     },
     "apps/extension": {
       "name": "hermes-ide",
-      "version": "0.2.2",
+      "version": "0.2.6",
+      "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.29.0",
+        "hono": "^4.12.25",
+      },
       "devDependencies": {
         "@types/node": "20.x",
         "@types/vscode": "^1.80.0",
         "esbuild": "^0.20.0",
         "typescript": "^5.3.0",
-      },
-    },
-    "apps/mcp-interceptor": {
-      "name": "mcp-interceptor",
-      "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.29.0",
-        "hono": "^4.12.25",
-        "zod": "^4.4.3",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-      },
-      "peerDependencies": {
-        "typescript": "^5",
       },
     },
     "apps/webview-ui": {
@@ -510,8 +500,6 @@
     "magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
-
-    "mcp-interceptor": ["mcp-interceptor@workspace:apps/mcp-interceptor"],
 
     "media-typer": ["media-typer@1.1.0", "", {}, "sha512-aisnrDP4GNe06UcKFnV5bfMNPBUw4jsLGaWwWfnH3v02GnBuXX2MCVn5RbrWo0j3pczUilYblq7fQ7Nw2t5XKw=="],
 
