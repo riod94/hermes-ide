@@ -308,16 +308,16 @@ export function injectMcpConfig(store: ProfileStore): { success: number; total: 
         configContent = readFileSync(configPath, "utf-8");
       }
 
-      // Cek apakah sudah ada mcp_servers.ide entry
-      const ideEntryRegex = /^(\s*)ide:\s*\n\s+url:\s*"[^"]*"/m;
+      // Cek apakah sudah ada mcp_servers.ide entry (dengan atau tanpa quotes di URL)
+      const ideEntryRegex = /^\s+ide:\s*\n\s+url:\s*/m;
       const mcpServersRegex = /^mcp_servers:\s*$/m;
 
       const newIdeBlock = `  ide:\n    url: "${mcpUrl}"\n    timeout: 300`;
 
       if (ideEntryRegex.test(configContent)) {
-        // Update existing ide entry — replace url line
+        // Update existing ide entry — replace url + timeout block
         configContent = configContent.replace(
-          /(\s*)ide:\s*\n\s+url:\s*"[^"]*"\n\s+timeout:\s*\d+/m,
+          /(\s+)ide:\s*\n\s+url:\s*"?[^"\n]*"?\n\s+timeout:\s*\d+/m,
           `  ide:\n    url: "${mcpUrl}"\n    timeout: 300`
         );
         details.push(`${profile.name}: updated existing MCP ide config`);
