@@ -25,7 +25,7 @@ export function generateDockerCompose(store: ProfileStore): string {
   for (const profile of store.profiles) {
     const serviceName = `hermes-ide-${profile.name}`;
     const apiPort = profile.port + 10000;
-    const mcpHostPort = profile.port + 20000; // MCP port: code-server port + 20000
+    const mcpHostPort = profile.port + 5000; // MCP port: code-server port + 5000 (e.g. 51007 → 56007)
     
     services.push(`  ${serviceName}:
     image: ${CODE_SERVER_IMAGE}
@@ -298,7 +298,7 @@ export function injectMcpConfig(store: ProfileStore): { success: number; total: 
   for (const profile of store.profiles) {
     const profileDir = join(HERMES_PROFILES_DIR, profile.name);
     const configPath = join(profileDir, "config.yaml");
-    const mcpHostPort = profile.port + 20000;
+    const mcpHostPort = profile.port + 5000;
     const mcpUrl = `http://127.0.0.1:${mcpHostPort}/mcp`;
 
     try {
@@ -347,5 +347,5 @@ export function injectMcpConfig(store: ProfileStore): { success: number; total: 
 
 /** Get MCP host port for a profile */
 export function getMcpHostPort(profile: { port: number }): number {
-  return profile.port + 20000;
+  return profile.port + 5000;
 }
