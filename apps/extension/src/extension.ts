@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ChatViewProvider, draftProvider } from './ChatViewProvider';
-import { mcpServerManager } from './mcpServer';
+import { mcpBridge } from './McpBridge';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Hermes Extension activated');
@@ -9,6 +9,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider('hermes-draft', draftProvider)
   );
+
   const provider = new ChatViewProvider(context.extensionUri);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, provider)
@@ -21,17 +22,21 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Start MCP Server as standalone Bun subprocess
-  mcpServerManager.start(context.extensionPath).catch((err) => {
-    console.error('Failed to start MCP Server:', err);
-    vscode.window.showErrorMessage(`Hermes MCP Server failed to start: ${err.message}`);
+  // Start MCP Bridge — connects to standalone MCP Service via HTTP+SSE
+  mcpBridge.onDiff((payload) => {
+    // Forward diff proposals to webview
+    vscode.commands.executeCommand('hermes.showDiffControls', payload);
   });
-  context.subscriptions.push({ dispose: () => mcpServerManager.stop() });
 
-  // Register internal command untuk webview mengkonfirmasi diff
+  mcpBridge.start().catch((err) => {
+    console.error('Failed to connect MCP Bridge:', err);
+  });
+  context.subscriptions.push({ dispose: () => mcpBridge.stop() });
+
+  // Register command for webview to resolve diffs
   context.subscriptions.push(
     vscode.commands.registerCommand('hermes.resolveDiff', (diffId: string, decision: 'accept' | 'reject') => {
-      mcpServerManager.resolveDiff(diffId, decision);
+      mcpBridge.resolveDiff(diffId, decision);
     })
   );
 }

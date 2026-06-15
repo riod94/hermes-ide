@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { HermesClient } from './HermesClient';
-import { mcpServerManager } from './mcpServer';
+import { mcpBridge } from './McpBridge';
 
 // TextDocumentContentProvider for hermes-draft
 class HermesDraftProvider implements vscode.TextDocumentContentProvider {
@@ -11,10 +11,9 @@ class HermesDraftProvider implements vscode.TextDocumentContentProvider {
   }
 
   public provideTextDocumentContent(uri: vscode.Uri): string {
-    // Support dua cara: via Map (openDiff manual) dan via query param (MCP propose)
     const filepath = uri.path;
     
-    // Cek dari query param dulu (dari MCP server)
+    // Check query param first (from MCP bridge)
     const params = new URLSearchParams(uri.query);
     const contentFromQuery = params.get('content');
     if (contentFromQuery) {
@@ -62,7 +61,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           this._handleResolveDiff(data.value);
           break;
         case 'clearChat':
-          // Future: persist clear state
           break;
         case 'copyCode':
           vscode.env.clipboard.writeText(data.value);
@@ -77,7 +75,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // Register command handler untuk menerima event dari MCP Server
+    // Register command handler to receive events from MCP Bridge
     vscode.commands.registerCommand('hermes.showDiffControls', (payload: {
       diffId: string;
       filepath: string;
@@ -92,14 +90,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this._view?.webview.postMessage(message);
   }
 
-  /** Kirim pending diff ke Webview UI untuk ditampilkan sebagai DiffAlert */
+  /** Send pending diff to Webview UI */
   private _showDiffInWebview(payload: { diffId: string; filepath: string; new_content: string }) {
     this.postMessage({
       type: 'showPendingDiff',
       diff: {
         id: payload.diffId,
         filepath: payload.filepath,
-        original_content: '', // MCP server sudah baca original, webview hanya perlu filepath
+        original_content: '',
         new_content: payload.new_content,
       },
     });
@@ -110,7 +108,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     try {
       const originalUri = vscode.Uri.file(payload.filepath);
       
-      // Provide a virtual doc for the proposed changes
       draftProvider.setDraft(payload.filepath, payload.newContent);
       const draftUri = vscode.Uri.parse(`hermes-draft:${payload.filepath}`);
       
@@ -127,20 +124,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** Handle user Approve/Reject action — sekarang langsung resolve via MCP Server Manager */
+  /** Handle user Approve/Reject — resolve via MCP Bridge HTTP */
   private async _handleResolveDiff(payload: { diffId: string, action: 'approve' | 'reject', filepath?: string, newContent?: string }) {
     try {
-      // Resolve langsung ke MCP Server Manager (in-process, tidak perlu HTTP)
-      mcpServerManager.resolveDiff(payload.diffId, payload.action);
+      // Map webview "approve" → MCP "accept"
+      const decision = payload.action === 'approve' ? 'accept' : 'reject';
+      await mcpBridge.resolveDiff(payload.diffId, decision);
 
+      const filename = payload.filepath?.split('/').pop() || 'file';
       if (payload.action === 'approve') {
-        vscode.window.showInformationMessage(`Hermes: Approved changes to ${payload.filepath?.split('/').pop() || 'file'}`);
-        // Close diff tab
-        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        vscode.window.showInformationMessage(`Hermes: Approved changes to ${filename}`);
       } else {
-        vscode.window.showWarningMessage(`Hermes: Rejected changes to ${payload.filepath?.split('/').pop() || 'file'}`);
-        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        vscode.window.showWarningMessage(`Hermes: Rejected changes to ${filename}`);
       }
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
     } catch (e) {
       console.error('[Hermes] Failed to resolve diff', e);
       vscode.window.showErrorMessage('Hermes: Failed to resolve diff.');
@@ -149,7 +146,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   /** Handle incoming chat message from user */
   private async _handleChatMessage(text: string) {
-    // Add user message to webview
     this.postMessage({
       type: 'addMessage',
       message: {
@@ -161,10 +157,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       },
     });
 
-    // Generate unique ID for assistant response
     const responseId = `msg-${Date.now()}-assistant`;
     
-    // Create initial empty response
     this.postMessage({
       type: 'addMessage',
       message: {
@@ -190,7 +184,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         contextString += `Selected Code:\n\`\`\`\n${selectedText}\n\`\`\`\n`;
       }
       
-      // Get active diagnostics (linter errors) for current file
       const diagnostics = vscode.languages.getDiagnostics(doc.uri);
       if (diagnostics.length > 0) {
         const errors = diagnostics
@@ -204,7 +197,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    // Call Hermes API
     let fullContent = '';
     try {
       await this._hermesClient.streamChat(text, contextString, (chunk: string) => {
@@ -221,7 +213,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       fullContent += `\n\nError: ${e.message}`;
     }
 
-    // Finalize message status
     this.postMessage({
       type: 'updateMessage',
       id: responseId,
@@ -231,7 +222,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
-    // Use webview URIs for external script/style loading (standard VS Code approach)
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'webview-dist', 'index.js')
     );
@@ -239,7 +229,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       vscode.Uri.joinPath(this._extensionUri, 'webview-dist', 'index.css')
     );
 
-    // Use nonce for Content Security Policy
     const nonce = getNonce();
 
     return `<!DOCTYPE html>

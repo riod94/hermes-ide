@@ -48,6 +48,8 @@ export function generateDockerCompose(store: ProfileStore): string {
     const apiPort = profile.port + 10000;
     const hermesApiKey = getHermesApiKey(profile.name, profile.password);
     
+    const mcpPort = profile.port + 5000; // MCP service port on host
+    
     services.push(`  ${serviceName}:
     image: ${CODE_SERVER_IMAGE}
     container_name: ${serviceName}
@@ -59,6 +61,9 @@ export function generateDockerCompose(store: ProfileStore): string {
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:${apiPort}/v1
       - HERMES_API_KEY=${hermesApiKey}
+      - MCP_SERVICE_URL=http://host.docker.internal:${mcpPort}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /home/ade/projects/${profile.name}:/projects
       - ./config-${profile.name}:/config

@@ -424,9 +424,11 @@ setInterval(() => {
 const PORT = parseInt(process.env.MCP_PORT || "51600", 10);
 const PROFILE = process.env.MCP_PROFILE || "unknown";
 
+const BIND = process.env.MCP_BIND || "0.0.0.0"; // Accessible from Docker containers + localhost
+
 Bun.serve({
   port: PORT,
-  hostname: "127.0.0.1", // localhost only — Nginx proxies from outside
+  hostname: BIND,
   idleTimeout: 120,
   fetch: app.fetch,
 });
@@ -434,7 +436,7 @@ Bun.serve({
 log(`Hermes MCP Service started`);
 log(`  Profile : ${PROFILE}`);
 log(`  Port    : ${PORT}`);
-log(`  Bind    : 127.0.0.1:${PORT}`);
+log(`  Bind    : ${BIND}:${PORT}`);
 log(`  MCP     : http://127.0.0.1:${PORT}/mcp`);
 log(`  Health  : http://127.0.0.1:${PORT}/health`);
 log(`  Events  : http://127.0.0.1:${PORT}/api/events`);
