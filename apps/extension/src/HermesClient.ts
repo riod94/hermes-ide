@@ -34,6 +34,34 @@ export class HermesClient {
       }
 
       if (response.body) {
+        const handleLine = (line: string) => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              
+              if (data.type === "response.output_item.added" && data.item?.type === "function_call") {
+                const toolName = data.item.name;
+                if (toolName === "search_files" || toolName === "read_file") {
+                   onChunk(`\n> ⏳ **Exploring codebase...**\n\n`);
+                } else {
+                   onChunk(`\n> ⏳ **Using tool: \`${toolName}\`...**\n\n`);
+                }
+              } else if (data.type === "response.output_text.delta") {
+                onChunk(data.delta || data.text || "");
+              } else if (data.type === "function_call") {
+                onChunk(`\n> 🛠️ **Using Tool: \`${data.name}\`...**\n\n`);
+              } else if (data.choices && data.choices[0].delta?.content) {
+                onChunk(data.choices[0].delta.content);
+              } else if (data.event === "hermes.tool.progress") {
+                onChunk(`\n> 🛠️ **${data.tool}**: ${JSON.stringify(data.arguments || {})}\n\n`);
+              }
+            } catch (e) {
+              // Silently ignore parse errors for incomplete chunks
+            }
+          }
+        };
+
         // VS Code extension host runs in Node.js, so response.body might be a Node stream
         // Need to handle async iterator
         const body: any = response.body;
@@ -48,41 +76,7 @@ export class HermesClient {
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
             for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
-                try {
-                  let rawLine = trimmed.slice(6);
-                  // Kadang Hermes API mengirim event marker sebelum data
-                  if (trimmed.startsWith("event: ")) {
-                      continue; // Abaikan baris event, parse data di baris berikutnya
-                  }
-                  
-                  const data = JSON.parse(rawLine);
-                  
-                  // Tool call progress indicators
-                  if (data.type === "response.output_item.added" && data.item?.type === "function_call") {
-                    const toolName = data.item.name;
-                    if (toolName === "search_files" || toolName === "read_file") {
-                       onChunk(`\n> ⏳ **Exploring codebase...**\n`);
-                    } else {
-                       onChunk(`\n> ⏳ **Using tool: ${toolName}...**\n`);
-                    }
-                    continue;
-                  }
-
-                  if (data.type === "response.output_text.delta") {
-                    onChunk(data.delta || data.text || "");
-                  } else if (data.type === "function_call") {
-                    onChunk(`\n> 🛠️ **Mengerjakan Tool: ${data.name}**\n`);
-                  } else if (data.choices && data.choices[0].delta?.content) {
-                    onChunk(data.choices[0].delta.content);
-                  } else if (data.event === "hermes.tool.progress") {
-                    onChunk(`\n> 🛠️ **${data.tool}**: ${JSON.stringify(data.arguments || {})}\n`);
-                  }
-                } catch (e) {
-                  // Silently ignore parse errors for incomplete chunks
-                }
-              }
+              handleLine(line);
             }
           }
         } else if (body[Symbol.asyncIterator]) {
@@ -93,21 +87,7 @@ export class HermesClient {
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
             for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
-                try {
-                  const data = JSON.parse(trimmed.slice(6));
-                  if (data.type === "response.output_text.delta") {
-                    onChunk(data.delta || data.text || "");
-                  } else if (data.type === "function_call") {
-                    onChunk(`\n> 🛠️ **Mengerjakan Tool: ${data.name}**\n`);
-                  } else if (data.choices && data.choices[0].delta?.content) {
-                    onChunk(data.choices[0].delta.content);
-                  } else if (data.event === "hermes.tool.progress") {
-                    onChunk(`\n> 🛠️ **${data.tool}**: ${JSON.stringify(data.arguments || {})}\n`);
-                  }
-                } catch (e) { }
-              }
+              handleLine(line);
             }
           }
         }
