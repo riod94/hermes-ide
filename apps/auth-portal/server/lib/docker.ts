@@ -18,6 +18,23 @@ const AUTH_PORTAL_PORT = 51000;
 
 const CODE_SERVER_IMAGE = "lscr.io/linuxserver/code-server:latest";
 const MCP_SERVER_PORT = 51600; // Port MCP server di dalam container (internal only)
+const HERMES_PROFILES_DIR = "/home/ade/.hermes/profiles";
+
+/**
+ * Read API_SERVER_KEY from a Hermes profile's .env file.
+ * Falls back to profile password if .env doesn't exist or key not set.
+ */
+function getHermesApiKey(profileName: string, fallback: string): string {
+  const envPath = join(HERMES_PROFILES_DIR, profileName, ".env");
+  try {
+    if (!existsSync(envPath)) return fallback;
+    const content = readFileSync(envPath, "utf-8");
+    const match = content.match(/^API_SERVER_KEY=(.+)$/m);
+    return match ? match[1].trim() : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 // ─────────────────────────────────────────────
 // Docker Compose generation
@@ -30,6 +47,7 @@ export function generateDockerCompose(store: ProfileStore): string {
     const serviceName = `hermes-ide-${profile.name}`;
     const apiPort = profile.port + 10000;
     const mcpHostPort = profile.port + 5000; // MCP: 51001→56001, ..., 51010→56010 (max 56010, well under 65535)
+    const hermesApiKey = getHermesApiKey(profile.name, profile.password);
     
     services.push(`  ${serviceName}:
     image: ${CODE_SERVER_IMAGE}
@@ -41,7 +59,7 @@ export function generateDockerCompose(store: ProfileStore): string {
       - PASSWORD=${profile.password}
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:${apiPort}/v1
-      - HERMES_API_KEY=${profile.password}
+      - HERMES_API_KEY=${hermesApiKey}
     volumes:
       - /home/ade/projects/${profile.name}:/projects
       - ./config-${profile.name}:/config
@@ -322,8 +340,6 @@ export function getMcpUrl(profileName: string): string {
 // ─────────────────────────────────────────────
 // MCP config injection ke Hermes profiles
 // ─────────────────────────────────────────────
-
-const HERMES_PROFILES_DIR = "/home/ade/.hermes/profiles";
 
 /**
  * Inject konfigurasi MCP server `ide` ke config.yaml profil Hermes.

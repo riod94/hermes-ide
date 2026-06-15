@@ -148,7 +148,7 @@ services:
       - PASSWORD=rio2025
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61007/v1
-      - HERMES_API_KEY=rio2025
+      - HERMES_API_KEY=ad49de3a6fd90446f9dfecb502f6e8322c0935740c7b30f87dcd25e0002739bc
     volumes:
       - /home/ade/projects/rio:/projects
       - ./config-rio:/config
