@@ -114,11 +114,15 @@ export async function installExtensionOnContainer(profileName: string): Promise<
     VSIX=\$(ls -t /hermes-extension/*.vsix | head -n 1)
     if [ -n "\$VSIX" ]; then
       echo "Installing \$VSIX..."
-      # Install using code-server CLI (without --extensions-dir so it uses the correct runtime default)
-      /app/code-server/bin/code-server --install-extension "\$VSIX" --force
-      # Ensure permissions for the abc user on both possible dirs
+      # Clean up old hermes extensions first to prevent caching issues
+      rm -rf /config/extensions/nusawork.hermes-ide* 2>/dev/null || true
+      rm -f /config/extensions/.obsolete 2>/dev/null || true
+      
+      # Install using code-server CLI to the explicitly configured dir
+      /app/code-server/bin/code-server --extensions-dir /config/extensions --install-extension "\$VSIX" --force
+      
+      # Ensure permissions for the abc user
       chown -R abc:abc /config/extensions 2>/dev/null || true
-      chown -R abc:abc /config/.local/share/code-server/extensions 2>/dev/null || true
       exit 0
     else
       echo "No .vsix found in /hermes-extension/"
