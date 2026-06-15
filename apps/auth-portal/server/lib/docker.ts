@@ -17,7 +17,11 @@ const SSL_KEY = "/etc/letsencrypt/live/app.dev.nusa.work-0001/privkey.pem";
 const AUTH_PORTAL_PORT = 51000;
 
 const CODE_SERVER_IMAGE = "lscr.io/linuxserver/code-server:latest";
-const MCP_SERVER_PORT = 51600; // Port MCP server di dalam Extension Host
+const MCP_SERVER_PORT = 51600; // Port MCP server di dalam container (internal only)
+
+// ─────────────────────────────────────────────
+// Docker Compose generation
+// ─────────────────────────────────────────────
 
 export function generateDockerCompose(store: ProfileStore): string {
   const services: string[] = [];
@@ -25,7 +29,7 @@ export function generateDockerCompose(store: ProfileStore): string {
   for (const profile of store.profiles) {
     const serviceName = `hermes-ide-${profile.name}`;
     const apiPort = profile.port + 10000;
-    const mcpHostPort = profile.port + 5000; // MCP port: code-server port + 5000 (e.g. 51007 → 56007)
+    const mcpHostPort = profile.port + 5000; // MCP: 51001→56001, ..., 51010→56010 (max 56010, well under 65535)
     
     services.push(`  ${serviceName}:
     image: ${CODE_SERVER_IMAGE}
@@ -44,7 +48,7 @@ export function generateDockerCompose(store: ProfileStore): string {
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "${profile.port}:8443"
-      - "${mcpHostPort}:${MCP_SERVER_PORT}"
+      - "127.0.0.1:${mcpHostPort}:${MCP_SERVER_PORT}"
     networks:
       - hermes-ide-net
     restart: unless-stopped`);
@@ -105,7 +109,7 @@ export async function installExtensionOnContainer(profileName: string): Promise<
   const cwd = join(import.meta.dir, "../../../code-server-infra");
   
   // Extension file inside the container
-  // We use wildcard *.vsix in case version bumps
+  // ls -t: pick the newest .vsix in case multiple versions exist
   const script = `
     VSIX=\$(ls -t /hermes-extension/*.vsix | head -n 1)
     if [ -n "\$VSIX" ]; then
@@ -135,13 +139,17 @@ export async function installExtensionOnContainer(profileName: string): Promise<
  * Generate nginx config with:
  * - ide.app.dev.nusa.work → Auth Portal (port 51000)
  * - ide-{name}.app.dev.nusa.work → code-server container (per profile port)
+ *   - location /           → code-server (port 8443 via host-mapped port)
+ *   - location /mcp        → MCP server inside extension host (port 51600 via container IP)
+ *   - location /health/mcp → MCP health check
  */
 export function generateNginxConfig(store: ProfileStore): string {
   const profileServerBlocks = store.profiles
     .map((profile) => {
       const subdomain = `ide-${profile.name}`;
+      const mcpHostPort = profile.port + 5000;
       return `
-# ${profile.name} (port ${profile.port})
+# ${profile.name} (code-server: ${profile.port}, mcp: ${mcpHostPort})
 server {
     listen 443 ssl;
     server_name ${subdomain}.${IDE_DOMAIN};
@@ -153,6 +161,28 @@ server {
 
     client_max_body_size 200M;
 
+    # MCP Server (Extension Host)
+    # Hermes Agent connects here: https://${subdomain}.${IDE_DOMAIN}/mcp
+    location /mcp {
+        proxy_pass http://127.0.0.1:${mcpHostPort}/mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 600s;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
+    }
+
+    # MCP Health check
+    location = /health/mcp {
+        proxy_pass http://127.0.0.1:${mcpHostPort}/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    # Code-server (default)
     location / {
         proxy_pass http://127.0.0.1:${profile.port}/;
         proxy_http_version 1.1;
@@ -271,6 +301,11 @@ export function getIdeUrl(profileName: string): string {
   return `https://ide-${profileName}.${IDE_DOMAIN}/`;
 }
 
+/** Get the MCP URL for a profile (domain-based, no port needed) */
+export function getMcpUrl(profileName: string): string {
+  return `https://ide-${profileName}.${IDE_DOMAIN}/mcp`;
+}
+
 // ─────────────────────────────────────────────
 // MCP config injection ke Hermes profiles
 // ─────────────────────────────────────────────
@@ -280,16 +315,10 @@ const HERMES_PROFILES_DIR = "/home/ade/.hermes/profiles";
 /**
  * Inject konfigurasi MCP server `ide` ke config.yaml profil Hermes.
  * 
- * Format yang di-inject:
- * ```yaml
- * mcp_servers:
- *   ide:
- *     url: "http://127.0.0.1:{mcpHostPort}/mcp"
- *     timeout: 300
- * ```
+ * URL sekarang domain-based (tanpa port):
+ *   https://ide-{name}.app.dev.nusa.work/mcp
  * 
- * Jika config.yaml sudah punya `mcp_servers`, kita hanya tambah/update entry `ide`.
- * Jika belum ada config.yaml, buat minimal config.
+ * Pattern ini predictable — profil baru otomatis ikut.
  */
 export function injectMcpConfig(store: ProfileStore): { success: number; total: number; details: string[] } {
   const details: string[] = [];
@@ -298,41 +327,42 @@ export function injectMcpConfig(store: ProfileStore): { success: number; total: 
   for (const profile of store.profiles) {
     const profileDir = join(HERMES_PROFILES_DIR, profile.name);
     const configPath = join(profileDir, "config.yaml");
-    const mcpHostPort = profile.port + 5000;
-    const mcpUrl = `http://127.0.0.1:${mcpHostPort}/mcp`;
+
+    // Skip jika profil Hermes tidak exist (e.g. "default" yang cuma container tanpa agent)
+    if (!existsSync(configPath)) {
+      details.push(`${profile.name}: skipped — no Hermes profile`);
+      continue;
+    }
+
+    const mcpUrl = getMcpUrl(profile.name);
 
     try {
-      let configContent = "";
-      
-      if (existsSync(configPath)) {
-        configContent = readFileSync(configPath, "utf-8");
-      }
+      let configContent = readFileSync(configPath, "utf-8");
 
-      // Cek apakah sudah ada mcp_servers.ide entry (dengan atau tanpa quotes di URL)
+      // Regex patterns — match ide entry apapun format URL-nya (http/https, port/domain)
       const ideEntryRegex = /^\s+ide:\s*\n\s+url:\s*/m;
-      const mcpServersRegex = /^mcp_servers:\s*$/m;
+      const mcpServersRegex = /^mcp_servers:\s*\n/m;
 
       const newIdeBlock = `  ide:\n    url: "${mcpUrl}"\n    timeout: 300`;
 
       if (ideEntryRegex.test(configContent)) {
-        // Update existing ide entry — replace url + timeout block
+        // Update existing ide entry
         configContent = configContent.replace(
           /(\s+)ide:\s*\n\s+url:\s*"?[^"\n]*"?\n\s+timeout:\s*\d+/m,
           `  ide:\n    url: "${mcpUrl}"\n    timeout: 300`
         );
-        details.push(`${profile.name}: updated existing MCP ide config`);
+        details.push(`${profile.name}: updated MCP url → ${mcpUrl}`);
       } else if (mcpServersRegex.test(configContent)) {
-        // mcp_servers key exists, tapi belum ada ide entry — tambahkan
+        // mcp_servers exists but no ide entry — insert after mcp_servers:
         configContent = configContent.replace(
-          /^(mcp_servers:\s*)$/m,
-          `mcp_servers:\n${newIdeBlock}`
+          /^(mcp_servers:\s*\n)/m,
+          `mcp_servers:\n${newIdeBlock}\n`
         );
-        details.push(`${profile.name}: added ide entry to existing mcp_servers`);
+        details.push(`${profile.name}: added ide entry → ${mcpUrl}`);
       } else {
-        // Belum ada mcp_servers sama sekali — append di akhir
-        const mcpBlock = `\nmcp_servers:\n${newIdeBlock}\n`;
-        configContent = configContent.trimEnd() + "\n" + mcpBlock;
-        details.push(`${profile.name}: appended new mcp_servers section`);
+        // No mcp_servers at all — append
+        configContent = configContent.trimEnd() + `\nmcp_servers:\n${newIdeBlock}\n`;
+        details.push(`${profile.name}: created mcp_servers → ${mcpUrl}`);
       }
 
       writeFileSync(configPath, configContent);
@@ -343,9 +373,4 @@ export function injectMcpConfig(store: ProfileStore): { success: number; total: 
   }
 
   return { success, total: store.profiles.length, details };
-}
-
-/** Get MCP host port for a profile */
-export function getMcpHostPort(profile: { port: number }): number {
-  return profile.port + 5000;
 }
