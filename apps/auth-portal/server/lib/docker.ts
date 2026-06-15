@@ -107,7 +107,7 @@ export async function installExtensionOnContainer(profileName: string): Promise<
   // Extension file inside the container
   // We use wildcard *.vsix in case version bumps
   const script = `
-    VSIX=\$(ls /hermes-extension/*.vsix | head -n 1)
+    VSIX=\$(ls -t /hermes-extension/*.vsix | head -n 1)
     if [ -n "\$VSIX" ]; then
       echo "Installing \$VSIX..."
       # Install using code-server CLI
