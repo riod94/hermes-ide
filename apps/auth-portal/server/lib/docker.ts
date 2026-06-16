@@ -417,32 +417,16 @@ export function injectMcpConfig(store: ProfileStore): { success: number; total: 
     try {
       let configContent = readFileSync(configPath, "utf-8");
 
-      // Regex patterns — match ide entry apapun format URL-nya (http/https, port/domain)
-      const ideEntryRegex = /^\s+ide:\s*\n\s+url:\s*/m;
-      const mcpServersRegex = /^mcp_servers:\s*\n/m;
-
+      // Remove any existing ide block completely (robust cleanup)
+      configContent = configContent.replace(/\n\s*ide:\s*\n\s+url:\s*[^\n]+\n\s+timeout:\s*\d+/g, '');
+      // Remove inline corrupted ones
+      configContent = configContent.replace(/mcp_servers:\s*ide:\s*\n\s+url:\s*[^\n]+\n\s+timeout:\s*\d+/g, 'mcp_servers:');
+      
       const newIdeBlock = `  ide:\n    url: "${mcpUrl}"\n    timeout: 300`;
-
-      if (ideEntryRegex.test(configContent)) {
-        // Update existing ide entry
-        configContent = configContent.replace(
-          /(\s+)ide:\s*\n\s+url:\s*"?[^"\n]*"?\n\s+timeout:\s*\d+/m,
-          `  ide:\n    url: "${mcpUrl}"\n    timeout: 300`
-        );
-        details.push(`${profile.name}: updated MCP url → ${mcpUrl}`);
-      } else if (mcpServersRegex.test(configContent)) {
-        // mcp_servers exists but no ide entry — insert after mcp_servers:
-        configContent = configContent.replace(
-          /^(mcp_servers:\s*\n)/m,
-          `mcp_servers:\n${newIdeBlock}\n`
-        );
-        details.push(`${profile.name}: added ide entry → ${mcpUrl}`);
-      } else {
-        // No mcp_servers at all — append
-        configContent = configContent.trimEnd() + `\nmcp_servers:\n${newIdeBlock}\n`;
-        details.push(`${profile.name}: created mcp_servers → ${mcpUrl}`);
-      }
-
+      
+      // Inject at the bottom to guarantee correctness without complex regex
+      configContent = configContent.trimEnd() + `\nmcp_servers:\n${newIdeBlock}\n`;
+      details.push(`${profile.name}: updated MCP url → ${mcpUrl}`);
       writeFileSync(configPath, configContent);
       success++;
     } catch (e: any) {
