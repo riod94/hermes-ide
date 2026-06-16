@@ -105,6 +105,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'renameSession':
           this._handleRenameSession(data.value);
           break;
+        // Model management messages
+        case 'getModels':
+          this._handleGetModels();
+          break;
+        case 'setModel':
+          this._handleSetModel(data.value);
+          break;
       }
     });
 
@@ -135,6 +142,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this._hermesClient.setConversationId(session.conversationId);
     this._currentMessages = [...session.messages];
 
+    // Restore persisted model
+    const savedModel = this._context.globalState.get<string>('hermes.activeModel');
+    if (savedModel) {
+      this._hermesClient.setModel(savedModel);
+    }
+
     // Send session data to webview
     this.postMessage({
       type: 'sessionLoaded',
@@ -147,6 +160,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // Send sessions list
     this._sendSessionsList();
+
+    // Fetch and send models
+    this._handleGetModels();
   }
 
   /** Create new session (save current first) */
@@ -272,6 +288,29 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this._currentMessages,
       this._hermesClient.getConversationId()
     );
+  }
+
+  // ───────────────── Model Management ─────────────────
+
+  /** Fetch models from upstream and send to webview */
+  private async _handleGetModels() {
+    const modelList = await this._hermesClient.fetchModels();
+    const currentModel = this._hermesClient.getModel();
+    this.postMessage({
+      type: 'modelsLoaded',
+      models: modelList,
+      activeModel: currentModel,
+    });
+  }
+
+  /** Set model on HermesClient and persist to globalState */
+  private async _handleSetModel(data: { id: string }) {
+    this._hermesClient.setModel(data.id);
+    await this._context.globalState.update('hermes.activeModel', data.id);
+    this.postMessage({
+      type: 'modelChanged',
+      model: data.id,
+    });
   }
 
   // ───────────────── Diff Handling ─────────────────

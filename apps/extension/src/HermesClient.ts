@@ -1,7 +1,13 @@
+export interface ModelInfo {
+  id: string;
+  owned_by: string;
+}
+
 export class HermesClient {
   private apiUrl: string;
   private apiKey: string;
   private conversationId: string = `ide-session-${Date.now()}`;
+  private _model: string = "hermes-agent";
 
   /** Get current conversation ID */
   public getConversationId(): string {
@@ -11,6 +17,45 @@ export class HermesClient {
   /** Set conversation ID (used when restoring a session) */
   public setConversationId(id: string): void {
     this.conversationId = id;
+  }
+
+  /** Get current model */
+  public getModel(): string {
+    return this._model;
+  }
+
+  /** Set model for subsequent requests */
+  public setModel(model: string): void {
+    this._model = model;
+  }
+
+  /**
+   * Fetch available models from the upstream provider (9router).
+   * Uses HERMES_UPSTREAM_URL env var (the actual LLM router) to list models,
+   * because Hermes API /v1/models only returns the wrapper model.
+   */
+  public async fetchModels(): Promise<ModelInfo[]> {
+    try {
+      // Use upstream provider URL for model listing
+      const upstreamUrl = process.env.HERMES_UPSTREAM_URL || this.apiUrl;
+      const upstreamKey = process.env.HERMES_UPSTREAM_KEY || this.apiKey;
+      
+      const response = await fetch(`${upstreamUrl}/models`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${upstreamKey}`,
+        },
+      });
+      if (!response.ok) {
+        console.warn(`[Hermes] Failed to fetch models: ${response.statusText}`);
+        return [];
+      }
+      const data = await response.json() as { data?: ModelInfo[] };
+      return data.data || [];
+    } catch (error) {
+      console.error("[Hermes] Error fetching models:", error);
+      return [];
+    }
   }
 
   /**
@@ -63,7 +108,7 @@ export class HermesClient {
           "Authorization": `Bearer ${this.apiKey}`
         },
         body: JSON.stringify({
-          model: "hermes-agent",
+          model: this._model,
           input: fullMessage,
           instructions: HermesClient.IDE_INSTRUCTIONS,
           conversation: this.conversationId,

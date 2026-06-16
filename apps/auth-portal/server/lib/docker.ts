@@ -60,6 +60,8 @@ export function generateDockerCompose(store: ProfileStore): string {
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:${apiPort}/v1
       - HERMES_API_KEY=${hermesApiKey}
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:${mcpPort}
       - HOST_PROJECTS_BASE=/home/ade/projects/${profile.name}
     extra_hosts:
