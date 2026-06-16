@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "auth_portal_port": 51000,
+    "base_port": 51002,
+    "fixed_profiles": {
+      "default": 51001
+    }
+  },
+  "profiles": [
+    {
+      "name": "default",
+      "password": "nusawork2025",
+      "role": "admin",
+      "port": 51001
+    },
+    {
+      "name": "aziz",
+      "password": "aziz2025",
+      "role": "developer",
+      "port": 51002
+    },
+    {
+      "name": "giffari",
+      "password": "giffari2025",
+      "role": "developer",
+      "port": 51003
+    },
+    {
+      "name": "meysha",
+      "password": "meysha2025",
+      "role": "developer",
+      "port": 51004
+    },
+    {
+      "name": "renanda",
+      "password": "renanda2025",
+      "role": "developer",
+      "port": 51005
+    },
+    {
+      "name": "rianto",
+      "password": "rianto2025",
+      "role": "developer",
+      "port": 51006
+    },
+    {
+      "name": "rio",
+      "password": "rio2025",
+      "role": "admin",
+      "port": 51007
+    },
+    {
+      "name": "ryan",
+      "password": "ryan2025",
+      "role": "developer",
+      "port": 51008
+    },
+    {
+      "name": "sabrino",
+      "password": "sabrino2025",
+      "role": "developer",
+      "port": 51009
+    },
+    {
+      "name": "yudi",
+      "password": "yudi2025",
+      "role": "developer",
+      "port": 51010
+    }
+  ]
+}

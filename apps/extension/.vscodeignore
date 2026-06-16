@@ -1,0 +1,14 @@
+.vscode/**
+.vscode-test/**
+out/**
+node_modules/**
+src/**
+.gitignore
+.yarnrc
+tsconfig.json
+**/*.map
+esbuild.js
+bun.lock
+.git/**
+apps/code-server-infra/**
+dist/mcpStandalone.ts

@@ -1,126 +1,239 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { login } from './lib/api';
+  import Dashboard from './lib/Dashboard.svelte';
 
-  let profiles = ["rio", "default", "sabrino"];
-  let selectedProfile = "rio";
+  let selectedProfile = "";
   let password = "";
   let isLoading = false;
   let showPassword = false;
+  let errorMsg = "";
+  let checkingSession = true;
 
-  function handleLogin() {
+  // Session state
+  let loggedIn = false;
+  let sessionName = "";
+  let sessionPassword = "";
+  let sessionRole = "";
+  let sessionPort = 0;
+
+  // Profiles for dropdown (fetched from API on mount)
+  let profileNames: string[] = [];
+
+  onMount(async () => {
+    // 1. Try restore session from localStorage
+    const saved = localStorage.getItem("hermes-ide-session");
+    if (saved) {
+      try {
+        const session = JSON.parse(saved);
+        // Validate session is still valid via API
+        const result = await login(session.name, session.password);
+        if (result.success && result.profile) {
+          sessionName = result.profile.name;
+          sessionRole = result.profile.role;
+          sessionPort = result.profile.port;
+          sessionPassword = session.password;
+
+          if (sessionRole === "admin") {
+            loggedIn = true;
+            checkingSession = false;
+            return;
+          } else {
+            // Developer — redirect
+            const host = window.location.hostname;
+            window.location.href = `http://${host}:${sessionPort}/`;
+            return;
+          }
+        }
+      } catch {
+        // Session invalid, clear
+        localStorage.removeItem("hermes-ide-session");
+      }
+    }
+
+    checkingSession = false;
+
+    // 2. Fetch profile names for dropdown
+    try {
+      const res = await fetch("/api/profile-names");
+      if (res.ok) {
+        const data = await res.json();
+        profileNames = data.names || [];
+        if (profileNames.length > 0) selectedProfile = profileNames[0];
+      }
+    } catch {
+      profileNames = ["default"];
+      selectedProfile = "default";
+    }
+  });
+
+  async function handleLogin() {
+    if (!selectedProfile || !password) {
+      errorMsg = "Pilih profil dan masukkan password";
+      return;
+    }
+
     isLoading = true;
-    setTimeout(() => {
-      console.log(`Login attempt for ${selectedProfile}`);
-      let port = 51000;
-      if (selectedProfile === "rio") port = 51001;
-      else if (selectedProfile === "default") port = 51002;
-      else if (selectedProfile === "sabrino") port = 51003;
-      window.location.href = `http://103.196.116.213:${port}/`;
+    errorMsg = "";
+
+    try {
+      const result = await login(selectedProfile, password);
+
+      if (result.success && result.profile) {
+        sessionName = result.profile.name;
+        sessionRole = result.profile.role;
+        sessionPort = result.profile.port;
+        sessionPassword = password;
+
+        // Save session to localStorage
+        localStorage.setItem("hermes-ide-session", JSON.stringify({
+          name: sessionName,
+          password: sessionPassword,
+        }));
+
+        if (sessionRole === "admin") {
+          loggedIn = true;
+        } else {
+          // Developer → proxy login to code-server (auto-bypass password)
+          const token = btoa(`${sessionName}:${sessionPassword}`);
+          window.location.href = `${window.location.origin}/api/open-ide?name=${encodeURIComponent(sessionName)}&token=${encodeURIComponent(token)}`;
+        }
+      } else {
+        errorMsg = result.error || "Login gagal";
+      }
+    } catch (e: any) {
+      errorMsg = "Koneksi ke server gagal";
+    } finally {
       isLoading = false;
-    }, 1000);
+    }
+  }
+
+  function handleLogout() {
+    loggedIn = false;
+    sessionName = "";
+    sessionPassword = "";
+    sessionRole = "";
+    sessionPort = 0;
+    password = "";
+    localStorage.removeItem("hermes-ide-session");
   }
 
   function togglePassword() {
     showPassword = !showPassword;
   }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") handleLogin();
+  }
 </script>
 
-<!-- Container utama layar penuh, flex, items-center dan justify-center untuk memastikan card di tengah absolute -->
-<main class="min-h-screen w-full flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black p-4">
-  
-  <div class="relative w-full max-w-md">
-    <!-- Glow effect behind the card -->
-    <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl blur opacity-25"></div>
+{#if checkingSession}
+  <!-- Loading splash while checking session -->
+  <main class="min-h-screen w-full flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black">
+    <div class="flex flex-col items-center gap-4">
+      <svg class="animate-spin w-10 h-10 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+      <p class="text-zinc-400 text-sm">Checking session...</p>
+    </div>
+  </main>
+{:else if loggedIn && sessionRole === "admin"}
+  <Dashboard
+    adminName={sessionName}
+    adminPassword={sessionPassword}
+    on:logout={handleLogout}
+  />
+{:else}
+  <!-- Login Page -->
+  <main class="min-h-screen w-full flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black p-4">
     
-    <!-- Main Card -->
-    <div class="relative bg-zinc-900/90 backdrop-blur-sm border border-zinc-800 p-8 rounded-2xl shadow-2xl">
+    <div class="relative w-full max-w-md">
+      <!-- Glow effect behind the card -->
+      <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl blur opacity-25"></div>
       
-      <!-- Header -->
-      <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 mb-4 ring-1 ring-blue-500/30">
-          <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-          </svg>
-        </div>
-        <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300">
-          Hermes IDE
-        </h1>
-        <p class="mt-2 text-sm text-zinc-400">Agentic Workspace Authentication</p>
-      </div>
-
-      <!-- Form -->
-      <form on:submit|preventDefault={handleLogin} class="space-y-6">
+      <!-- Main Card -->
+      <div class="relative bg-zinc-900/90 backdrop-blur-sm border border-zinc-800 p-8 rounded-2xl shadow-2xl">
         
-        <!-- Profile Dropdown -->
-        <div class="space-y-1.5">
-          <label for="profile" class="block text-sm font-medium text-zinc-300">Profile Select</label>
-          <div class="relative">
-            <select 
-              id="profile" 
+        <!-- Header -->
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 mb-4 ring-1 ring-blue-500/30">
+            <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+            </svg>
+          </div>
+          <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300">
+            Hermes IDE
+          </h1>
+          <p class="mt-2 text-sm text-zinc-400">Agentic Workspace Authentication</p>
+        </div>
+
+        <!-- Error message -->
+        {#if errorMsg}
+          <div class="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
+            {errorMsg}
+          </div>
+        {/if}
+
+        <!-- Profile Selector -->
+        <div class="space-y-5">
+          <div>
+            <label for="profile" class="block text-sm font-medium text-zinc-300 mb-2">Workspace Profile</label>
+            <select
+              id="profile"
               bind:value={selectedProfile}
-              class="appearance-none w-full bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-200"
+              class="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             >
-              {#each profiles as profile}
+              {#each profileNames as profile}
                 <option value={profile}>{profile}</option>
               {/each}
             </select>
-            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-zinc-400">
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
+          </div>
+
+          <!-- Password Input -->
+          <div>
+            <label for="password" class="block text-sm font-medium text-zinc-300 mb-2">Password</label>
+            <div class="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                bind:value={password}
+                on:keydown={handleKeydown}
+                placeholder="Enter workspace password"
+                class="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg px-4 py-3 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              />
+              <button
+                type="button"
+                on:click={togglePassword}
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                {#if showPassword}
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L6.5 6.5m7.378 7.378L17.5 17.5M3 3l18 18"/></svg>
+                {:else}
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                {/if}
+              </button>
             </div>
           </div>
+
+          <!-- Login Button -->
+          <button
+            on:click={handleLogin}
+            disabled={isLoading}
+            class="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {#if isLoading}
+              <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              Connecting...
+            {:else}
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Connect to IDE
+            {/if}
+          </button>
         </div>
 
-        <!-- Password Input -->
-        <div class="space-y-1.5">
-          <label for="password" class="block text-sm font-medium text-zinc-300">Passkey / Password</label>
-          <div class="relative">
-            <input 
-              type={showPassword ? "text" : "password"} 
-              id="password" 
-              bind:value={password}
-              placeholder="Enter credentials..."
-              class="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-200 placeholder:text-zinc-600"
-              required
-            />
-            <button 
-              type="button"
-              class="absolute inset-y-0 right-0 flex items-center px-4 text-zinc-400 hover:text-zinc-200 focus:outline-none"
-              on:click={togglePassword}
-            >
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {#if showPassword}
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                {:else}
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
-                {/if}
-              </svg>
-            </button>
-          </div>
+        <!-- Footer -->
+        <div class="mt-6 text-center">
+          <p class="text-xs text-zinc-600">Hermes IDE Extension · Nusawork</p>
         </div>
-
-        <!-- Submit Button -->
-        <button 
-          type="submit"
-          disabled={isLoading}
-          class="group relative w-full flex justify-center py-3.5 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-900 focus:ring-blue-500 transition-all duration-200 disabled:opacity-70"
-        >
-          {#if isLoading}
-            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Authenticating...
-          {:else}
-            Connect Workspace
-            <svg class="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
-            </svg>
-          {/if}
-        </button>
-      </form>
+      </div>
     </div>
-  </div>
-</main>
+  </main>
+{/if}
