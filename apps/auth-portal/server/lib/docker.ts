@@ -124,44 +124,77 @@ export async function restartContainers(): Promise<{ success: boolean; output: s
   };
 }
 
-/** Install extension on a running container via docker exec */
+// ─────────────────────────────────────────────
+// Extension build + install
+// ─────────────────────────────────────────────
+
+/** Build extension VSIX using bun + vsce */
+export async function buildExtensionVsix(): Promise<{ success: boolean; vsixPath: string; output: string }> {
+  const extensionDir = join(import.meta.dir, "../../../..", "apps/extension");
+  const rootDir = join(import.meta.dir, "../../../..");
+
+  try {
+    // Step 1: Full build (webview + copy + extension)
+    const build = Bun.spawn(["bun", "run", "build"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" });
+    const buildCode = await build.exited;
+    const buildOut = await new Response(build.stdout).text();
+    const buildErr = await new Response(build.stderr).text();
+    if (buildCode !== 0) {
+      return { success: false, vsixPath: "", output: `Build failed: ${buildErr || buildOut}` };
+    }
+
+    // Step 2: Package VSIX
+    const vsce = Bun.spawn(["bunx", "@vscode/vsce", "package", "--no-dependencies"], { cwd: extensionDir, stdout: "pipe", stderr: "pipe" });
+    const vsceCode = await vsce.exited;
+    const vsceOut = await new Response(vsce.stdout).text();
+    const vsceErr = await new Response(vsce.stderr).text();
+    if (vsceCode !== 0) {
+      return { success: false, vsixPath: "", output: `VSCE package failed: ${vsceErr || vsceOut}` };
+    }
+
+    // Find the built VSIX
+    const pkg = JSON.parse(await Bun.file(join(extensionDir, "package.json")).text());
+    const vsixPath = join(extensionDir, `hermes-ide-${pkg.version}.vsix`);
+
+    return { success: true, vsixPath, output: vsceOut };
+  } catch (e: any) {
+    return { success: false, vsixPath: "", output: e.message };
+  }
+}
+
+/** Install extension on a running container via docker cp + docker exec */
 export async function installExtensionOnContainer(profileName: string): Promise<boolean> {
   const containerName = `hermes-ide-${profileName}`;
-  const cwd = join(import.meta.dir, "../../../code-server-infra");
-  
-  // Extension file inside the container
-  // ls -t: pick the newest .vsix in case multiple versions exist
-  const script = `
-    VSIX=\$(ls -t /hermes-extension/*.vsix | head -n 1)
-    if [ -n "\$VSIX" ]; then
-      echo "Installing \$VSIX..."
-      # Clean up old hermes extensions in BOTH storage locations
-      # Location 1: --extensions-dir (primary)
+  const extensionDir = join(import.meta.dir, "../../../..", "apps/extension");
+
+  // Find latest VSIX on host
+  const pkg = JSON.parse(await Bun.file(join(extensionDir, "package.json")).text());
+  const vsixPath = join(extensionDir, `hermes-ide-${pkg.version}.vsix`);
+
+  if (!await Bun.file(vsixPath).exists()) {
+    return false;
+  }
+
+  try {
+    // Copy VSIX into container
+    const cp = Bun.spawn(["docker", "cp", vsixPath, `${containerName}:/tmp/hermes-ide.vsix`], { stdout: "pipe", stderr: "pipe" });
+    if (await cp.exited !== 0) return false;
+
+    // Install inside container
+    const script = `
       rm -rf /config/extensions/nusawork.hermes-ide* 2>/dev/null || true
       rm -f /config/extensions/.obsolete 2>/dev/null || true
-      # Location 2: shadow copy (code-server LSIO auto-creates this)
       rm -rf /config/.local/share/code-server/extensions/nusawork.hermes-ide* 2>/dev/null || true
-      
-      # Install using code-server CLI to the explicitly configured dir
-      /app/code-server/bin/code-server --extensions-dir /config/extensions --install-extension "\$VSIX" --force
-      
-      # Sync to shadow copy location so code-server serves the correct version
+      /app/code-server/bin/code-server --extensions-dir /config/extensions --install-extension /tmp/hermes-ide.vsix --force
       cp -r /config/extensions/nusawork.hermes-ide-* /config/.local/share/code-server/extensions/ 2>/dev/null || true
-      
-      # Ensure permissions for the abc user in both locations
       chown -R abc:abc /config/extensions 2>/dev/null || true
       chown -R abc:abc /config/.local/share/code-server/extensions/nusawork.hermes-ide-* 2>/dev/null || true
-      exit 0
-    else
-      echo "No .vsix found in /hermes-extension/"
-      exit 1
-    fi
-  `;
-
-  // Run as root so we can chown afterwards
-  const proc = Bun.spawn(["docker", "exec", containerName, "sh", "-c", script], { cwd, stdout: "pipe", stderr: "pipe" });
-  const exitCode = await proc.exited;
-  return exitCode === 0;
+    `;
+    const install = Bun.spawn(["docker", "exec", containerName, "sh", "-c", script], { stdout: "pipe", stderr: "pipe" });
+    return await install.exited === 0;
+  } catch {
+    return false;
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -362,6 +395,7 @@ export function injectMcpConfig(store: ProfileStore): { success: number; total: 
     // Skip jika profil Hermes tidak exist (e.g. "default" yang cuma container tanpa agent)
     if (!existsSync(configPath)) {
       details.push(`${profile.name}: skipped — no Hermes profile`);
+      success++; // Expected skip, not a failure
       continue;
     }
 
@@ -411,7 +445,7 @@ export function injectMcpConfig(store: ProfileStore): { success: number; total: 
 // ─────────────────────────────────────────────
 
 const MCP_ENV_DIR = "/etc/hermes-mcp";
-const SYSTEMD_UNIT_SRC = join(import.meta.dir, "../../../templates/mcp-hermes@.service");
+const SYSTEMD_UNIT_SRC = join(import.meta.dir, "../../templates/mcp-hermes@.service");
 const SYSTEMD_UNIT_DST = "/etc/systemd/system/mcp-hermes@.service";
 
 /**
@@ -469,7 +503,7 @@ export async function deployMcpServices(store: ProfileStore): Promise<{ success:
   await cp.exited;
 
   // Step 2: Generate env files
-  const envResult = generateMcpEnvFiles(store);
+  const envResult = await generateMcpEnvFiles(store);
   outputs.push(`Env files: ${envResult.success}/${store.profiles.length}`);
 
   // Step 3: Reload systemd daemon
