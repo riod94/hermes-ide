@@ -1,5 +1,5 @@
 import { loadStore, saveStore } from "../lib/store";
-import { writeDockerCompose, restartContainers, restartContainer, writeNginxConfig, reloadNginx, installExtensionOnContainer, injectMcpConfig, deployMcpServices, injectAllCodeServerSettings } from "../lib/docker";
+import { writeDockerCompose, restartContainers, restartContainer, writeNginxConfig, reloadNginx, buildExtensionVsix, installExtensionOnContainer, injectMcpConfig, deployMcpServices, injectAllCodeServerSettings } from "../lib/docker";
 
 function authenticate(req: Request): { authorized: boolean; role?: string } {
   const auth = req.headers.get("x-auth");
@@ -59,10 +59,20 @@ export async function handleDeploy(req: Request): Promise<Response> {
       message: mcpServiceResult.output,
     };
 
-    // ── Step 5: Install extension to containers ──
-    // Wait for containers to be ready
-    await new Promise(r => setTimeout(r, 5000));
+    // ── Step 5: Build + Install extension to containers ──
+    // Wait for containers to be fully ready after restart (init takes ~10-15s)
+    await new Promise(r => setTimeout(r, 15000));
 
+    // Step 5a: Build VSIX
+    const buildResult = await buildExtensionVsix();
+    steps.extension_build = {
+      success: buildResult.success,
+      message: buildResult.success
+        ? `VSIX built: ${buildResult.vsixPath}`
+        : `VSIX build failed: ${buildResult.output}`,
+    };
+
+    // Step 5b: Install to all containers
     let extSuccessCount = 0;
     const extDetails: string[] = [];
     for (const profile of store.profiles) {
