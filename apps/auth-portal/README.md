@@ -1,47 +1,74 @@
-# Svelte + TS + Vite
+# Hermes IDE — Auth Portal
 
-This template should help get you started developing with Svelte and TypeScript in Vite.
+Admin portal for managing multi-profile code-server infrastructure. Handles authentication, profile management, and automated deployment pipeline.
 
-## Recommended IDE Setup
+## Overview
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+The Auth Portal serves two purposes:
 
-## Need an official Svelte framework?
+1. **Authentication Gateway** — Login portal for code-server instances (each developer gets their own containerized VS Code)
+2. **Admin Dashboard** — Deploy pipeline, profile management, and infrastructure controls
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+## Tech Stack
 
-## Technical considerations
+- **Frontend:** Svelte + Vite + TypeScript
+- **Backend:** Bun HTTP server (port 51000)
+- **Deployment:** systemd (`hermes-auth-portal.service`)
 
-**Why use this over SvelteKit?**
+## API Routes
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/auth` | Authenticate user, set session cookie |
+| GET | `/api/profiles` | List all developer profiles |
+| GET | `/api/profile-names` | Get profile name list |
+| POST | `/api/deploy` | Run full deploy pipeline |
+| POST | `/api/open-ide` | Open/redirect to profile's code-server |
+| POST | `/api/chat` | Proxy chat to Hermes |
 
-This template contains as little as possible to get started with Vite + TypeScript + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
+## Deploy Pipeline
 
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
+The `/api/deploy` endpoint runs an 8-step automated pipeline:
 
-**Why `global.d.ts` instead of `compilerOptions.types` inside `jsconfig.json` or `tsconfig.json`?**
+| Step | Name | Description |
+|------|------|-------------|
+| 1 | `docker_compose` | Generate `docker-compose.yml` from template |
+| 2 | `containers` | Start/restart all code-server containers |
+| 3 | `build_vsix` | Build extension `.vsix` on host |
+| 4 | `extension` | Install extension into all containers via `docker cp` |
+| 5 | `mcp_env` | Generate MCP `.env` files per profile |
+| 6 | `settings` | Inject VS Code settings (file exclusions, search scope) |
+| 6b | `mcp_config` | Inject MCP server config into Hermes profiles |
+| 7 | `mcp_service` | Restart MCP Service (systemd) |
+| 8 | `nginx` | Reload Nginx reverse proxy config |
 
-Setting `compilerOptions.types` shuts out all other types not explicitly listed in the configuration. Using triple-slash references keeps the default TypeScript setting of accepting type information from the entire workspace, while also adding `svelte` and `vite/client` type information.
+## Development
 
-**Why include `.vscode/extensions.json`?**
+```bash
+# Dev mode (frontend + backend)
+bun run dev
 
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
+# Build frontend
+bun run build
 
-**Why enable `allowJs` in the TS template?**
+# Start production server
+bun run start
 
-While `allowJs: false` would indeed prevent the use of `.js` files in the project, it does not prevent the use of JavaScript syntax in `.svelte` files. In addition, it would force `checkJs: false`, bringing the worst of both worlds: not being able to guarantee the entire codebase is TypeScript, and also having worse typechecking for the existing JavaScript. In addition, there are valid use cases in which a mixed codebase may be relevant.
-
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/rixo/svelte-hmr#svelte-hmr).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```ts
-// store.ts
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+# Or just the backend
+bun run server
 ```
+
+## Configuration
+
+The portal reads infrastructure config from `../code-server-infra/` and manages:
+
+- Docker Compose generation (`docker.ts`)
+- Container lifecycle (start, stop, restart)
+- Extension installation (`docker cp` based)
+- MCP environment files
+- VS Code settings injection
+- Systemd service management (MCP Service, Nginx)
+
+## Authentication
+
+Cross-subdomain cookie authentication on `*.app.dev.nusa.work`. The portal sets a session cookie with `Domain=.app.dev.nusa.work` so all code-server subdomains share the auth state.
