@@ -132,11 +132,6 @@
   <!-- Header -->
   <ChatHeader onClear={handleClear} />
 
-  <!-- Model Selector Dropdown (below header) -->
-  {#if $showModelSelector}
-    <ModelSelector />
-  {/if}
-
   <!-- Messages Area -->
   <div bind:this={chatContainerEl}
        class="flex-1 overflow-y-auto px-3 py-3">
@@ -152,6 +147,11 @@
     {/if}
   </div>
 
-  <!-- Input Area -->
-  <ChatInput disabled={$isLoading} />
+  <!-- Input Area + Model Selector (anchored above input) -->
+  <div class="input-wrapper" style="position: relative; flex-shrink: 0;">
+    {#if $showModelSelector}
+      <ModelSelector />
+    {/if}
+    <ChatInput disabled={$isLoading} />
+  </div>
 </div>

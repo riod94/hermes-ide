@@ -35,7 +35,6 @@
   }
 
   function getDisplayName(modelId: string): string {
-    // Strip prefix like gc/, ag/, kr/ for cleaner display
     const slashIndex = modelId.indexOf('/');
     return slashIndex > -1 ? modelId.slice(slashIndex + 1) : modelId;
   }
@@ -48,7 +47,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div class="model-backdrop" onclick={handleBackdropClick}></div>
 
-<!-- Dropdown panel -->
+<!-- Dropdown panel — anchored above input toolbar -->
 <div class="model-dropdown">
   <div class="dropdown-header">
     <span class="dropdown-title">Select Model</span>
@@ -95,16 +94,17 @@
 
   .model-dropdown {
     position: absolute;
-    top: 100%;
+    bottom: 100%;
     left: 0;
     right: 0;
     z-index: 100;
-    border-bottom: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
     background: var(--color-sidebar);
     max-height: 320px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+    border-radius: 8px 8px 0 0;
   }
 
   .dropdown-header {
