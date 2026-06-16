@@ -179,11 +179,25 @@ export async function installExtensionOnContainer(profileName: string): Promise<
     const cp = Bun.spawn(["docker", "cp", vsixPath, `${containerName}:/tmp/hermes-ide.vsix`], { stdout: "pipe", stderr: "pipe" });
     if (await cp.exited !== 0) return false;
 
-    // Install inside container
+    // Install inside container — must clean stale state from extensions.json first
+    // otherwise code-server refuses with "Please restart VS Code before reinstalling"
     const script = `
       rm -rf /config/extensions/nusawork.hermes-ide* 2>/dev/null || true
       rm -f /config/extensions/.obsolete 2>/dev/null || true
       rm -rf /config/.local/share/code-server/extensions/nusawork.hermes-ide* 2>/dev/null || true
+      
+      # Clean stale hermes-ide entry from extensions.json (prevents "restart VS Code" error)
+      if [ -f /config/extensions/extensions.json ]; then
+        jq '[.[] | select(.identifier.id != "nusawork.hermes-ide")]' /config/extensions/extensions.json > /tmp/ext-clean.json 2>/dev/null && \
+        mv /tmp/ext-clean.json /config/extensions/extensions.json && \
+        chown abc:abc /config/extensions/extensions.json
+      fi
+      if [ -f /config/.local/share/code-server/extensions/extensions.json ]; then
+        jq '[.[] | select(.identifier.id != "nusawork.hermes-ide")]' /config/.local/share/code-server/extensions/extensions.json > /tmp/ext-clean2.json 2>/dev/null && \
+        mv /tmp/ext-clean2.json /config/.local/share/code-server/extensions/extensions.json && \
+        chown abc:abc /config/.local/share/code-server/extensions/extensions.json
+      fi
+      
       /app/code-server/bin/code-server --extensions-dir /config/extensions --install-extension /tmp/hermes-ide.vsix --force
       cp -r /config/extensions/nusawork.hermes-ide-* /config/.local/share/code-server/extensions/ 2>/dev/null || true
       chown -R abc:abc /config/extensions 2>/dev/null || true

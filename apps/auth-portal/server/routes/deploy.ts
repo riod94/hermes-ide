@@ -60,8 +60,8 @@ export async function handleDeploy(req: Request): Promise<Response> {
     };
 
     // ── Step 5: Build + Install extension to containers ──
-    // Wait for containers to be ready
-    await new Promise(r => setTimeout(r, 5000));
+    // Wait for containers to be fully ready after restart (init takes ~10-15s)
+    await new Promise(r => setTimeout(r, 15000));
 
     // Step 5a: Build VSIX
     const buildResult = await buildExtensionVsix();
