@@ -2,14 +2,37 @@
   "name": "hermes-ide",
   "displayName": "Hermes IDE",
   "publisher": "nusawork",
-  "description": "Agentic Browser IDE extension for Hermes AI",
+  "description": "Agentic Browser IDE extension for Hermes AI — Chat with AI, review code diffs, and accept/reject proposed changes directly in your editor.",
   "version": "0.6.0",
+  "license": "UNLICENSED",
+  "icon": "assets/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/riod94/hermes-ide"
+  },
+  "homepage": "https://github.com/riod94/hermes-ide#readme",
+  "bugs": {
+    "url": "https://github.com/riod94/hermes-ide/issues"
+  },
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": [
     "Machine Learning",
+    "Chat",
+    "Programming Languages",
     "Other"
+  ],
+  "keywords": [
+    "ai",
+    "hermes",
+    "mcp",
+    "agentic",
+    "diff",
+    "code-review",
+    "chat",
+    "copilot",
+    "nusawork"
   ],
   "activationEvents": [
     "onStartupFinished"
