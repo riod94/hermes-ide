@@ -17,6 +17,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61001/v1
       - HERMES_API_KEY=nusawork2025
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56001
       - HOST_PROJECTS_BASE=/home/ade/projects/default
     extra_hosts:
@@ -41,6 +43,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61002/v1
       - HERMES_API_KEY=07476a8ecf105cefb8cf1760802b5da5ef7c4be948b8e178b3a083f6373484da
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56002
       - HOST_PROJECTS_BASE=/home/ade/projects/aziz
     extra_hosts:
@@ -65,6 +69,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61003/v1
       - HERMES_API_KEY=b074ccc306422e564693df958ed8bdce1c0087967c9e62331d8497c34b50d063
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56003
       - HOST_PROJECTS_BASE=/home/ade/projects/giffari
     extra_hosts:
@@ -89,6 +95,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61004/v1
       - HERMES_API_KEY=36e6bea667297fa49e25884f49e5fdc8009be47a61c260066c45a775eaa6d53a
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56004
       - HOST_PROJECTS_BASE=/home/ade/projects/meysha
     extra_hosts:
@@ -113,6 +121,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61005/v1
       - HERMES_API_KEY=4b292b62709579cb5da3172ed55b65049a7b4e1b85f27d87a65c167476d4df42
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56005
       - HOST_PROJECTS_BASE=/home/ade/projects/renanda
     extra_hosts:
@@ -137,6 +147,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61006/v1
       - HERMES_API_KEY=d6cbd0586c729223efd00458431c41b3430e3052886bc9141a232246432c18d7
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56006
       - HOST_PROJECTS_BASE=/home/ade/projects/rianto
     extra_hosts:
@@ -161,6 +173,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61007/v1
       - HERMES_API_KEY=ad49de3a6fd90446f9dfecb502f6e8322c0935740c7b30f87dcd25e0002739bc
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56007
       - HOST_PROJECTS_BASE=/home/ade/projects/rio
     extra_hosts:
@@ -185,6 +199,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61008/v1
       - HERMES_API_KEY=ryan2025
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56008
       - HOST_PROJECTS_BASE=/home/ade/projects/ryan
     extra_hosts:
@@ -209,6 +225,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61009/v1
       - HERMES_API_KEY=sabrino2025
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56009
       - HOST_PROJECTS_BASE=/home/ade/projects/sabrino
     extra_hosts:
@@ -233,6 +251,8 @@ services:
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:61010/v1
       - HERMES_API_KEY=yudi2025
+      - HERMES_UPSTREAM_URL=http://103.196.116.213:20128/v1
+      - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:56010
       - HOST_PROJECTS_BASE=/home/ade/projects/yudi
     extra_hosts:

@@ -5,9 +5,11 @@
   import TypingIndicator from './components/TypingIndicator.svelte';
   import WelcomeScreen from './components/WelcomeScreen.svelte';
   import SessionList from './components/SessionList.svelte';
+  import ModelSelector from './components/ModelSelector.svelte';
   import {
     messages, isLoading, updateMessage, clearMessages,
     sessions, activeSessionId, activeSessionTitle, showSessionList,
+    models, activeModel, showModelSelector,
   } from './lib/store';
   import { vscode } from './lib/vscode';
   import type { IncomingMessage } from './lib/types';
@@ -81,6 +83,18 @@
           activeSessionTitle.set(actMsg.session.title || 'New Chat');
           break;
         }
+        // Model management messages
+        case 'modelsLoaded': {
+          const modMsg = msg as any;
+          models.set(modMsg.models || []);
+          activeModel.set(modMsg.activeModel || 'hermes-agent');
+          break;
+        }
+        case 'modelChanged': {
+          const chgMsg = msg as any;
+          activeModel.set(chgMsg.model);
+          break;
+        }
       }
     }
     window.addEventListener('message', handleMessage);
@@ -133,6 +147,11 @@
     {/if}
   </div>
 
-  <!-- Input Area -->
-  <ChatInput disabled={$isLoading} />
+  <!-- Input Area + Model Selector (anchored above input) -->
+  <div class="input-wrapper" style="position: relative; flex-shrink: 0;">
+    {#if $showModelSelector}
+      <ModelSelector />
+    {/if}
+    <ChatInput disabled={$isLoading} />
+  </div>
 </div>

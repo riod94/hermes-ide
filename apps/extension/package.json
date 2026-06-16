@@ -3,7 +3,7 @@
   "displayName": "Hermes IDE",
   "publisher": "nusawork",
   "description": "Agentic Browser IDE extension for Hermes AI — Chat with AI, review code diffs, and accept/reject proposed changes directly in your editor.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "UNLICENSED",
   "icon": "assets/icon.png",
   "repository": {

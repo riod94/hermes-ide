@@ -24,6 +24,12 @@ export interface SessionMeta {
   updatedAt: number;
 }
 
+/** Model info from upstream provider */
+export interface ModelInfo {
+  id: string;
+  owned_by: string;
+}
+
 /** Message types sent from webview to extension */
 export type OutgoingMessage =
   | { type: 'chatMessage'; value: string }
@@ -34,7 +40,9 @@ export type OutgoingMessage =
   | { type: 'loadSession'; value: { id: string } }
   | { type: 'deleteSession'; value: { id: string } }
   | { type: 'getSessions' }
-  | { type: 'renameSession'; value: { id: string; title: string } };
+  | { type: 'renameSession'; value: { id: string; title: string } }
+  | { type: 'getModels' }
+  | { type: 'setModel'; value: { id: string } };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
@@ -53,4 +61,6 @@ export type IncomingMessage =
   | { type: 'showPendingDiff'; diff: PendingDiff }
   | { type: 'sessionsUpdated'; sessions: SessionMeta[]; activeSessionId: string | null }
   | { type: 'sessionLoaded'; session: { id: string; title: string; messages: ChatMessage[] } }
-  | { type: 'activeSession'; session: { id: string; title: string } };
+  | { type: 'activeSession'; session: { id: string; title: string } }
+  | { type: 'modelsLoaded'; models: ModelInfo[]; activeModel: string }
+  | { type: 'modelChanged'; model: string };

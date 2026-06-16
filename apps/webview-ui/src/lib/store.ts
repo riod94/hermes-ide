@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import type { ChatMessage, SessionMeta } from './types';
+import type { ChatMessage, SessionMeta, ModelInfo } from './types';
 
 /** All chat messages */
 export const messages = writable<ChatMessage[]>([]);
@@ -26,6 +26,17 @@ export const activeSessionTitle = writable<string>('New Chat');
 
 /** Whether session list panel is visible */
 export const showSessionList = writable(false);
+
+// ───────────────── Model State ─────────────────
+
+/** Available models from upstream provider */
+export const models = writable<ModelInfo[]>([]);
+
+/** Currently selected model ID */
+export const activeModel = writable<string>('hermes-agent');
+
+/** Whether model selector dropdown is visible */
+export const showModelSelector = writable(false);
 
 // ───────────────── Message Helpers ─────────────────
 
