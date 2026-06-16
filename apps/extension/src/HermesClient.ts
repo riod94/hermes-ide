@@ -3,6 +3,16 @@ export class HermesClient {
   private apiKey: string;
   private conversationId: string = `ide-session-${Date.now()}`;
 
+  /** Get current conversation ID */
+  public getConversationId(): string {
+    return this.conversationId;
+  }
+
+  /** Set conversation ID (used when restoring a session) */
+  public setConversationId(id: string): void {
+    this.conversationId = id;
+  }
+
   /**
    * System-level instructions injected into every Hermes API call.
    * Forces the agent to use mcp_ide_ide_propose_diff for all file edits

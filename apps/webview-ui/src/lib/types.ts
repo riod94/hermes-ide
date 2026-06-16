@@ -14,12 +14,27 @@ export interface VsCodeApi {
   setState(state: unknown): void;
 }
 
+/** Session metadata for list display */
+export interface SessionMeta {
+  id: string;
+  title: string;
+  messageCount: number;
+  preview: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** Message types sent from webview to extension */
 export type OutgoingMessage =
   | { type: 'chatMessage'; value: string }
   | { type: 'clearChat' }
   | { type: 'copyCode'; value: string }
-  | { type: 'ready' };
+  | { type: 'ready' }
+  | { type: 'newSession' }
+  | { type: 'loadSession'; value: { id: string } }
+  | { type: 'deleteSession'; value: { id: string } }
+  | { type: 'getSessions' }
+  | { type: 'renameSession'; value: { id: string; title: string } };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
@@ -35,4 +50,7 @@ export type IncomingMessage =
   | { type: 'updateMessage'; id: string; content: string; status?: ChatMessage['status'] }
   | { type: 'clearMessages' }
   | { type: 'setProfile'; name: string; role: string }
-  | { type: 'showPendingDiff'; diff: PendingDiff };
+  | { type: 'showPendingDiff'; diff: PendingDiff }
+  | { type: 'sessionsUpdated'; sessions: SessionMeta[]; activeSessionId: string | null }
+  | { type: 'sessionLoaded'; session: { id: string; title: string; messages: ChatMessage[] } }
+  | { type: 'activeSession'; session: { id: string; title: string } };
