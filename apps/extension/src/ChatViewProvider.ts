@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { HermesClient } from './HermesClient';
 import { mcpBridge } from './McpBridge';
+import { hostPathToContainer } from './pathMapper';
 
 // TextDocumentContentProvider for hermes-draft
 class HermesDraftProvider implements vscode.TextDocumentContentProvider {
@@ -61,6 +62,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           this._handleResolveDiff(data.value);
           break;
         case 'clearChat':
+          this.hermesClient.resetConversation();
           break;
         case 'copyCode':
           vscode.env.clipboard.writeText(data.value);
@@ -106,16 +108,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Handle opening Diff view in VS Code */
   private async _handleOpenDiff(payload: { filepath: string, originalContent: string, newContent: string }) {
     try {
-      const originalUri = vscode.Uri.file(payload.filepath);
+      const containerPath = hostPathToContainer(payload.filepath);
+      const originalUri = vscode.Uri.file(containerPath);
       
-      draftProvider.setDraft(payload.filepath, payload.newContent);
-      const draftUri = vscode.Uri.parse(`hermes-draft:${payload.filepath}`);
+      draftProvider.setDraft(containerPath, payload.newContent);
+      const draftUri = vscode.Uri.parse(`hermes-draft:${containerPath}`);
       
       await vscode.commands.executeCommand(
         'vscode.diff',
         originalUri,
         draftUri,
-        `Review Draft: ${payload.filepath.split('/').pop()}`,
+        `Review Draft: ${containerPath.split('/').pop()}`,
         { preview: true }
       );
     } catch (e) {

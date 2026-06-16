@@ -11,6 +11,7 @@
 
 import * as vscode from "vscode";
 import * as fs from "fs";
+import { hostPathToContainer } from "./pathMapper";
 
 export class McpBridge {
   private baseUrl: string;
@@ -249,32 +250,36 @@ export class McpBridge {
   }): Promise<void> {
     this.log(`Diff proposal: ${payload.filepath} (${payload.diffId})`);
 
-    // Store locally
+    // Translate host path → container path for VS Code file operations
+    const containerPath = hostPathToContainer(payload.filepath);
+    this.log(`Path mapped: ${payload.filepath} → ${containerPath}`);
+
+    // Store locally (keep original host path for MCP resolve communication)
     this.pendingDiffs.set(payload.diffId, {
       filepath: payload.filepath,
       new_content: payload.new_content,
     });
 
-    // Open VS Code diff editor
+    // Open VS Code diff editor using container-local path
     try {
-      let originalUri = vscode.Uri.file(payload.filepath);
+      let originalUri = vscode.Uri.file(containerPath);
 
       // Create file → use empty virtual URI
-      if (!fs.existsSync(payload.filepath)) {
+      if (!fs.existsSync(containerPath)) {
         originalUri = vscode.Uri.parse(
-          `hermes-draft:${payload.filepath}?content=`
+          `hermes-draft:${containerPath}?content=`
         );
       }
 
       const draftUri = vscode.Uri.parse(
-        `hermes-draft:${payload.filepath}?content=${encodeURIComponent(payload.new_content)}`
+        `hermes-draft:${containerPath}?content=${encodeURIComponent(payload.new_content)}`
       );
 
       await vscode.commands.executeCommand(
         "vscode.diff",
         originalUri,
         draftUri,
-        `Propose: ${payload.filepath.split("/").pop()}`
+        `Propose: ${containerPath.split("/").pop()}`
       );
     } catch (e: any) {
       this.log(`Failed to open diff editor: ${e.message}`);

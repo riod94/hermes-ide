@@ -10,11 +10,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-default
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=nusawork2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/default
       - HERMES_API_URL=http://103.196.116.213:61001/v1
       - HERMES_API_KEY=nusawork2025
     volumes:
@@ -32,11 +33,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-aziz
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=aziz2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/aziz
       - HERMES_API_URL=http://103.196.116.213:61002/v1
       - HERMES_API_KEY=aziz2025
     volumes:
@@ -54,11 +56,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-giffari
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=giffari2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/giffari
       - HERMES_API_URL=http://103.196.116.213:61003/v1
       - HERMES_API_KEY=giffari2025
     volumes:
@@ -76,11 +79,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-meysha
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=meysha2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/meysha
       - HERMES_API_URL=http://103.196.116.213:61004/v1
       - HERMES_API_KEY=meysha2025
     volumes:
@@ -98,11 +102,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-renanda
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=renanda2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/renanda
       - HERMES_API_URL=http://103.196.116.213:61005/v1
       - HERMES_API_KEY=renanda2025
     volumes:
@@ -120,11 +125,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-rianto
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=rianto2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/rianto
       - HERMES_API_URL=http://103.196.116.213:61006/v1
       - HERMES_API_KEY=rianto2025
     volumes:
@@ -142,20 +148,23 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-rio
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=rio2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/rio
       - HERMES_API_URL=http://103.196.116.213:61007/v1
-      - HERMES_API_KEY=rio2025
+      - HERMES_API_KEY=ad49de3a6fd90446f9dfecb502f6e8322c0935740c7b30f87dcd25e0002739bc
+      - MCP_SERVICE_URL=http://host.docker.internal:56007
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /home/ade/projects/rio:/projects
       - ./config-rio:/config
       - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51007:8443"
-      - "127.0.0.1:56007:51600"
     networks:
       - hermes-ide-net
     restart: unless-stopped
@@ -164,11 +173,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-ryan
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=ryan2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/ryan
       - HERMES_API_URL=http://103.196.116.213:61008/v1
       - HERMES_API_KEY=ryan2025
     volumes:
@@ -186,11 +196,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-sabrino
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=sabrino2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/sabrino
       - HERMES_API_URL=http://103.196.116.213:61009/v1
       - HERMES_API_KEY=sabrino2025
     volumes:
@@ -208,11 +219,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: hermes-ide-yudi
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=yudi2025
       - DEFAULT_WORKSPACE=/projects
+      - HOST_PROJECTS_BASE=/home/ade/projects/yudi
       - HERMES_API_URL=http://103.196.116.213:61010/v1
       - HERMES_API_KEY=yudi2025
     volumes:

@@ -1,3 +1,4 @@
+// tested mcp diff
 import * as vscode from 'vscode';
 import { ChatViewProvider, draftProvider } from './ChatViewProvider';
 import { mcpBridge } from './McpBridge';

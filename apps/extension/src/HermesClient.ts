@@ -1,11 +1,42 @@
 export class HermesClient {
   private apiUrl: string;
   private apiKey: string;
-  private conversationId: string = "ide-session";
+  private conversationId: string = `ide-session-${Date.now()}`;
+
+  /**
+   * System-level instructions injected into every Hermes API call.
+   * Forces the agent to use mcp_ide_ide_propose_diff for all file edits
+   * instead of write_file/patch/terminal sed.
+   */
+  private static readonly IDE_INSTRUCTIONS = [
+    "You are running inside an IDE session. The developer is watching your changes in real-time.",
+    "",
+    "MANDATORY FILE EDITING RULE:",
+    "- For ALL code file changes (create/edit), you MUST use the `mcp_ide_ide_propose_diff` tool.",
+    "- Parameters: filepath (absolute path), new_content (full file content after changes).",
+    "- This tool opens a diff view in the IDE and BLOCKS until the developer clicks Accept or Reject.",
+    "- If rejected, ask what needs to change. Do NOT retry the same diff.",
+    "",
+    "FORBIDDEN during this IDE session:",
+    "- write_file for code files",
+    "- patch for code files",
+    "- terminal commands that edit files (sed, echo >, cat >, tee, awk)",
+    "",
+    "EXCEPTIONS (allowed without mcp_ide_ide_propose_diff):",
+    "- .gitignore, README.md, config files, documentation",
+    "- git add/commit/push via terminal",
+    "- Installing dependencies (bun add, npm install, composer require)",
+    "- Reading files (read_file, search_files)",
+  ].join("\n");
 
   constructor() {
     this.apiUrl = process.env.HERMES_API_URL || "http://127.0.0.1:3000/v1";
     this.apiKey = process.env.HERMES_API_KEY || "default-token";
+  }
+
+  /** Reset conversation — starts a fresh session with new ID */
+  public resetConversation(): void {
+    this.conversationId = `ide-session-${Date.now()}`;
   }
 
   /**
@@ -24,6 +55,7 @@ export class HermesClient {
         body: JSON.stringify({
           model: "hermes-agent",
           input: fullMessage,
+          instructions: HermesClient.IDE_INSTRUCTIONS,
           conversation: this.conversationId,
           stream: true
         })

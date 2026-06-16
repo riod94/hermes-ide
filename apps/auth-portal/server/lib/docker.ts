@@ -53,14 +53,15 @@ export function generateDockerCompose(store: ProfileStore): string {
     image: ${CODE_SERVER_IMAGE}
     container_name: ${serviceName}
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Asia/Jakarta
       - PASSWORD=${profile.password}
       - DEFAULT_WORKSPACE=/projects
       - HERMES_API_URL=http://103.196.116.213:${apiPort}/v1
       - HERMES_API_KEY=${hermesApiKey}
       - MCP_SERVICE_URL=http://host.docker.internal:${mcpPort}
+      - HOST_PROJECTS_BASE=/home/ade/projects/${profile.name}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -495,6 +496,98 @@ export async function deployMcpServices(store: ProfileStore): Promise<{ success:
   }
 
   return { success: true, output: outputs.join("\n") };
+}
+
+// ─────────────────────────────────────────────
+// Code-server settings injection
+// ─────────────────────────────────────────────
+
+const DEFAULT_SETTINGS = {
+  "workbench.startupEditor": "none",
+  "workbench.colorTheme": "Default Dark Modern",
+  "editor.fontSize": 14,
+  "editor.minimap.enabled": false,
+  "editor.wordWrap": "on",
+  "files.autoSave": "afterDelay",
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/.hermes": true,
+    "**/node_modules": true,
+    "**/.old_modules*": true,
+    "**/vendor": true,
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.old_modules*": true,
+    "**/vendor": true,
+    "**/.hermes": true,
+    "**/storage/logs": true,
+    "**/storage/framework": true,
+    "**/.git": true,
+    "**/dist": true,
+    "**/*.vsix": true,
+    "**/config-*/": true,
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.old_modules*/**": true,
+    "**/vendor/**": true,
+    "**/.hermes/**": true,
+  },
+};
+
+/**
+ * Inject VS Code settings.json into a running code-server container.
+ * Ensures correct ownership (abc:abc) so code-server can read/write it.
+ */
+export async function injectCodeServerSettings(profileName: string): Promise<boolean> {
+  const containerName = `hermes-ide-${profileName}`;
+  const settingsJson = JSON.stringify(DEFAULT_SETTINGS, null, 2);
+  // Escape single quotes for shell
+  const escaped = settingsJson.replace(/'/g, "'\\''");
+
+  const script = `
+    mkdir -p /config/data/User
+    echo '${escaped}' > /config/data/User/settings.json
+    chown abc:abc /config/data/User/settings.json
+    chmod 644 /config/data/User/settings.json
+  `;
+
+  const proc = Bun.spawn(["docker", "exec", containerName, "sh", "-c", script], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const exitCode = await proc.exited;
+  return exitCode === 0;
+}
+
+/**
+ * Inject settings into all containers.
+ */
+export async function injectAllCodeServerSettings(
+  store: ProfileStore
+): Promise<{ success: number; total: number; details: string[] }> {
+  const details: string[] = [];
+  let success = 0;
+
+  for (const profile of store.profiles) {
+    const ok = await injectCodeServerSettings(profile.name);
+    if (ok) {
+      success++;
+      details.push(`${profile.name}: settings injected`);
+    } else {
+      details.push(`${profile.name}: settings injection FAILED`);
+    }
+  }
+
+  return { success, total: store.profiles.length, details };
 }
 
 /**

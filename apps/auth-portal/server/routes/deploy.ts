@@ -1,5 +1,5 @@
 import { loadStore, saveStore } from "../lib/store";
-import { writeDockerCompose, restartContainers, restartContainer, writeNginxConfig, reloadNginx, installExtensionOnContainer, injectMcpConfig, deployMcpServices } from "../lib/docker";
+import { writeDockerCompose, restartContainers, restartContainer, writeNginxConfig, reloadNginx, installExtensionOnContainer, injectMcpConfig, deployMcpServices, injectAllCodeServerSettings } from "../lib/docker";
 
 function authenticate(req: Request): { authorized: boolean; role?: string } {
   const auth = req.headers.get("x-auth");
@@ -84,8 +84,18 @@ export async function handleDeploy(req: Request): Promise<Response> {
     for (const profile of store.profiles) {
       await restartContainer(`hermes-ide-${profile.name}`);
     }
-    // Wait before MCP config injection
+    // Wait before settings injection and MCP config
     await new Promise(r => setTimeout(r, 3000));
+
+    // ── Step 6b: Inject code-server settings ──
+    // Ensures files.exclude, search.exclude, files.watcherExclude are set
+    // and settings.json has correct ownership (abc:abc, not root:root)
+    const settingsResult = await injectAllCodeServerSettings(store);
+    steps.settings = {
+      success: settingsResult.success === settingsResult.total,
+      message: `Settings injected in ${settingsResult.success}/${settingsResult.total} containers`,
+      details: settingsResult.details,
+    };
 
     // ── Step 7: Inject MCP config ke Hermes profiles ──
     // Sets mcp_servers.ide.url in each profile's config.yaml
