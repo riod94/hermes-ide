@@ -24,7 +24,6 @@ services:
     volumes:
       - /home/ade/projects/default:/projects
       - ./config-default:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51001:8443"
     networks:
@@ -49,7 +48,6 @@ services:
     volumes:
       - /home/ade/projects/aziz:/projects
       - ./config-aziz:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51002:8443"
     networks:
@@ -74,7 +72,6 @@ services:
     volumes:
       - /home/ade/projects/giffari:/projects
       - ./config-giffari:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51003:8443"
     networks:
@@ -99,7 +96,6 @@ services:
     volumes:
       - /home/ade/projects/meysha:/projects
       - ./config-meysha:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51004:8443"
     networks:
@@ -124,7 +120,6 @@ services:
     volumes:
       - /home/ade/projects/renanda:/projects
       - ./config-renanda:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51005:8443"
     networks:
@@ -149,7 +144,6 @@ services:
     volumes:
       - /home/ade/projects/rianto:/projects
       - ./config-rianto:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51006:8443"
     networks:
@@ -174,7 +168,6 @@ services:
     volumes:
       - /home/ade/projects/rio:/projects
       - ./config-rio:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51007:8443"
     networks:
@@ -199,7 +192,6 @@ services:
     volumes:
       - /home/ade/projects/ryan:/projects
       - ./config-ryan:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51008:8443"
     networks:
@@ -224,7 +216,6 @@ services:
     volumes:
       - /home/ade/projects/sabrino:/projects
       - ./config-sabrino:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51009:8443"
     networks:
@@ -249,7 +240,6 @@ services:
     volumes:
       - /home/ade/projects/yudi:/projects
       - ./config-yudi:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "51010:8443"
     networks:

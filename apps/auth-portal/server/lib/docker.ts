@@ -67,7 +67,6 @@ export function generateDockerCompose(store: ProfileStore): string {
     volumes:
       - /home/ade/projects/${profile.name}:/projects
       - ./config-${profile.name}:/config
-      - /home/ade/projects/rio/hermes-ide-extension/apps/extension:/hermes-extension:ro
     ports:
       - "${profile.port}:8443"
     networks:
