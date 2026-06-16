@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import type { ChatMessage } from './types';
+import type { ChatMessage, SessionMeta } from './types';
 
 /** All chat messages */
 export const messages = writable<ChatMessage[]>([]);
@@ -12,6 +12,22 @@ export const profile = writable({ name: 'Hermes', role: 'admin' });
 
 /** Message count */
 export const messageCount = derived(messages, ($messages) => $messages.length);
+
+// ───────────────── Session State ─────────────────
+
+/** List of all sessions (metadata only) */
+export const sessions = writable<SessionMeta[]>([]);
+
+/** Currently active session ID */
+export const activeSessionId = writable<string | null>(null);
+
+/** Currently active session title */
+export const activeSessionTitle = writable<string>('New Chat');
+
+/** Whether session list panel is visible */
+export const showSessionList = writable(false);
+
+// ───────────────── Message Helpers ─────────────────
 
 /** Generate unique message ID */
 export function createMessageId(): string {

@@ -4,7 +4,11 @@
   import ChatInput from './components/ChatInput.svelte';
   import TypingIndicator from './components/TypingIndicator.svelte';
   import WelcomeScreen from './components/WelcomeScreen.svelte';
-  import { messages, isLoading, addMessage, updateMessage, clearMessages } from './lib/store';
+  import SessionList from './components/SessionList.svelte';
+  import {
+    messages, isLoading, updateMessage, clearMessages,
+    sessions, activeSessionId, activeSessionTitle, showSessionList,
+  } from './lib/store';
   import { vscode } from './lib/vscode';
   import type { IncomingMessage } from './lib/types';
   import DiffAlert from './components/DiffAlert.svelte';
@@ -56,6 +60,27 @@
         case 'clearMessages':
           clearMessages();
           break;
+        // Session management messages
+        case 'sessionsUpdated': {
+          const sessMsg = msg as any;
+          sessions.set(sessMsg.sessions);
+          activeSessionId.set(sessMsg.activeSessionId);
+          break;
+        }
+        case 'sessionLoaded': {
+          const loadMsg = msg as any;
+          // Replace all messages with loaded session
+          messages.set(loadMsg.session.messages || []);
+          activeSessionId.set(loadMsg.session.id);
+          activeSessionTitle.set(loadMsg.session.title || 'New Chat');
+          break;
+        }
+        case 'activeSession': {
+          const actMsg = msg as any;
+          activeSessionId.set(actMsg.session.id);
+          activeSessionTitle.set(actMsg.session.title || 'New Chat');
+          break;
+        }
       }
     }
     window.addEventListener('message', handleMessage);
@@ -85,6 +110,11 @@
 <div class="flex flex-col h-screen overflow-hidden" style="background: var(--color-bg);">
   <DiffAlert {pendingDiffs} onResolved={handleDiffResolved} />
   
+  <!-- Session List Panel (slide-in overlay) -->
+  {#if $showSessionList}
+    <SessionList />
+  {/if}
+
   <!-- Header -->
   <ChatHeader onClear={handleClear} />
 

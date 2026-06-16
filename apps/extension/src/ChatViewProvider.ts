@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { HermesClient } from './HermesClient';
 import { mcpBridge } from './McpBridge';
 import { hostPathToContainer } from './pathMapper';
+import { SessionManager, type SessionMessage } from './SessionManager';
 
 // TextDocumentContentProvider for hermes-draft
 class HermesDraftProvider implements vscode.TextDocumentContentProvider {
@@ -32,9 +33,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hermes.chatView';
   private _view?: vscode.WebviewView;
   private _hermesClient: HermesClient;
+  private _sessionManager: SessionManager;
+  private _extensionUri: vscode.Uri;
 
-  constructor(private readonly _extensionUri: vscode.Uri) {
+  // Track current messages for session save
+  private _currentMessages: SessionMessage[] = [];
+
+  constructor(private readonly _context: vscode.ExtensionContext) {
+    this._extensionUri = _context.extensionUri;
     this._hermesClient = new HermesClient();
+    this._sessionManager = new SessionManager(_context);
+  }
+
+  /** Expose HermesClient for external access */
+  public get hermesClient(): HermesClient {
+    return this._hermesClient;
   }
 
   public resolveWebviewView(
@@ -63,7 +76,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           this._handleResolveDiff(data.value);
           break;
         case 'clearChat':
-          this.hermesClient.resetConversation();
+          this._hermesClient.resetConversation();
           break;
         case 'copyCode':
           vscode.env.clipboard.writeText(data.value);
@@ -71,9 +84,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'ready':
           console.log('[Hermes] Webview ready');
+          this._handleWebviewReady();
           break;
         case 'openDiff':
           this._handleOpenDiff(data.value);
+          break;
+        // Session management messages
+        case 'newSession':
+          this._handleNewSession();
+          break;
+        case 'loadSession':
+          this._handleLoadSession(data.value);
+          break;
+        case 'deleteSession':
+          this._handleDeleteSession(data.value);
+          break;
+        case 'getSessions':
+          this._sendSessionsList();
+          break;
+        case 'renameSession':
+          this._handleRenameSession(data.value);
           break;
       }
     });
@@ -92,6 +122,159 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   public postMessage(message: unknown) {
     this._view?.webview.postMessage(message);
   }
+
+  // ───────────────── Session Management ─────────────────
+
+  /** Handle webview ready — restore active session */
+  private async _handleWebviewReady() {
+    const session = await this._sessionManager.getOrCreateActiveSession(
+      this._hermesClient.getConversationId()
+    );
+
+    // Restore conversation ID on HermesClient
+    this._hermesClient.setConversationId(session.conversationId);
+    this._currentMessages = [...session.messages];
+
+    // Send session data to webview
+    this.postMessage({
+      type: 'sessionLoaded',
+      session: {
+        id: session.id,
+        title: session.title,
+        messages: session.messages,
+      },
+    });
+
+    // Send sessions list
+    this._sendSessionsList();
+  }
+
+  /** Create new session (save current first) */
+  private async _handleNewSession() {
+    // Save current session before creating new
+    const activeId = this._sessionManager.getActiveSessionId();
+    if (activeId && this._currentMessages.length > 0) {
+      await this._sessionManager.saveSession(
+        activeId,
+        this._currentMessages,
+        this._hermesClient.getConversationId()
+      );
+    }
+
+    // Reset client
+    this._hermesClient.resetConversation();
+    this._currentMessages = [];
+
+    // Create new session
+    const session = await this._sessionManager.createSession(
+      this._hermesClient.getConversationId()
+    );
+
+    // Clear webview and notify
+    this.postMessage({ type: 'clearMessages' });
+    this.postMessage({
+      type: 'activeSession',
+      session: { id: session.id, title: session.title },
+    });
+
+    this._sendSessionsList();
+  }
+
+  /** Load an existing session */
+  private async _handleLoadSession(data: { id: string }) {
+    // Save current session before switching
+    const activeId = this._sessionManager.getActiveSessionId();
+    if (activeId && activeId !== data.id && this._currentMessages.length > 0) {
+      await this._sessionManager.saveSession(
+        activeId,
+        this._currentMessages,
+        this._hermesClient.getConversationId()
+      );
+    }
+
+    const session = this._sessionManager.loadSession(data.id);
+    if (!session) {
+      vscode.window.showWarningMessage('Session not found');
+      return;
+    }
+
+    // Set active
+    await this._sessionManager.setActiveSessionId(data.id);
+    this._hermesClient.setConversationId(session.conversationId);
+    this._currentMessages = [...session.messages];
+
+    // Send to webview
+    this.postMessage({
+      type: 'sessionLoaded',
+      session: {
+        id: session.id,
+        title: session.title,
+        messages: session.messages,
+      },
+    });
+
+    this._sendSessionsList();
+  }
+
+  /** Delete a session */
+  private async _handleDeleteSession(data: { id: string }) {
+    const activeId = this._sessionManager.getActiveSessionId();
+    await this._sessionManager.deleteSession(data.id);
+
+    // If deleted active session, create new one
+    if (activeId === data.id) {
+      this._hermesClient.resetConversation();
+      this._currentMessages = [];
+      const session = await this._sessionManager.createSession(
+        this._hermesClient.getConversationId()
+      );
+      this.postMessage({ type: 'clearMessages' });
+      this.postMessage({
+        type: 'activeSession',
+        session: { id: session.id, title: session.title },
+      });
+    }
+
+    this._sendSessionsList();
+  }
+
+  /** Rename a session */
+  private async _handleRenameSession(data: { id: string; title: string }) {
+    await this._sessionManager.renameSession(data.id, data.title);
+    this._sendSessionsList();
+
+    // If renaming active session, update header
+    if (this._sessionManager.getActiveSessionId() === data.id) {
+      this.postMessage({
+        type: 'activeSession',
+        session: { id: data.id, title: data.title },
+      });
+    }
+  }
+
+  /** Send sessions list to webview */
+  private _sendSessionsList() {
+    const sessions = this._sessionManager.listSessions();
+    const activeId = this._sessionManager.getActiveSessionId();
+    this.postMessage({
+      type: 'sessionsUpdated',
+      sessions,
+      activeSessionId: activeId,
+    });
+  }
+
+  /** Auto-save current session (called after message changes) */
+  private async _autoSaveSession() {
+    const activeId = this._sessionManager.getActiveSessionId();
+    if (!activeId) return;
+    await this._sessionManager.saveSession(
+      activeId,
+      this._currentMessages,
+      this._hermesClient.getConversationId()
+    );
+  }
+
+  // ───────────────── Diff Handling ─────────────────
 
   /** Send pending diff to Webview UI */
   private _showDiffInWebview(payload: { diffId: string; filepath: string; new_content: string }) {
@@ -155,15 +338,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  // ───────────────── Chat Message Handling ─────────────────
+
   /** Handle incoming chat message from user */
   private async _handleChatMessage(text: string) {
+    // Track user message
+    const userMsg: SessionMessage = {
+      id: `msg-${Date.now()}-user`,
+      role: 'user',
+      content: text,
+      timestamp: Date.now(),
+    };
+    this._currentMessages.push(userMsg);
+
     this.postMessage({
       type: 'addMessage',
       message: {
-        id: `msg-${Date.now()}-user`,
-        role: 'user',
-        content: text,
-        timestamp: Date.now(),
+        ...userMsg,
         status: 'done',
       },
     });
@@ -230,6 +421,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       content: fullContent,
       status: 'done'
     });
+
+    // Track assistant message and auto-save
+    this._currentMessages.push({
+      id: responseId,
+      role: 'assistant',
+      content: fullContent,
+      timestamp: Date.now(),
+    });
+
+    await this._autoSaveSession();
+
+    // Also update sessions list (preview/count changed)
+    this._sendSessionsList();
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
