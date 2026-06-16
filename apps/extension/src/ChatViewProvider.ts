@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { HermesClient } from './HermesClient';
 import { mcpBridge } from './McpBridge';
 import { hostPathToContainer } from './pathMapper';
@@ -109,10 +110,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private async _handleOpenDiff(payload: { filepath: string, originalContent: string, newContent: string }) {
     try {
       const containerPath = hostPathToContainer(payload.filepath);
-      const originalUri = vscode.Uri.file(containerPath);
+      
+      // If file doesn't exist yet (new file), use empty virtual doc as original
+      let originalUri: vscode.Uri;
+      if (fs.existsSync(containerPath)) {
+        originalUri = vscode.Uri.file(containerPath);
+      } else {
+        originalUri = vscode.Uri.parse(`hermes-draft:${containerPath}?content=`);
+      }
       
       draftProvider.setDraft(containerPath, payload.newContent);
-      const draftUri = vscode.Uri.parse(`hermes-draft:${containerPath}`);
+      const draftUri = vscode.Uri.parse(`hermes-draft:${containerPath}?content=${encodeURIComponent(payload.newContent)}`);
       
       await vscode.commands.executeCommand(
         'vscode.diff',
