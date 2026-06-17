@@ -10,6 +10,7 @@
     messages, isLoading, updateMessage, clearMessages,
     sessions, activeSessionId, activeSessionTitle, showSessionList,
     models, activeModel, showModelSelector,
+    attachments,
   } from './lib/store';
   import { vscode } from './lib/vscode';
   import type { IncomingMessage } from './lib/types';
@@ -93,6 +94,22 @@
         case 'modelChanged': {
           const chgMsg = msg as any;
           activeModel.set(chgMsg.model);
+          break;
+        }
+        // Attachment messages (from @file / @folder picks)
+        case 'attachmentAdded': {
+          const attMsg = msg as any;
+          attachments.update((items: any[]) => [...items, attMsg.attachment]);
+          break;
+        }
+        case 'folderFilesAdded': {
+          const folderMsg = msg as any;
+          // Add folder as a single attachment
+          attachments.update((items: any[]) => [...items, {
+            type: 'folder',
+            name: folderMsg.folderName,
+            path: folderMsg.folderPath,
+          }]);
           break;
         }
       }
