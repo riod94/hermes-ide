@@ -124,7 +124,7 @@
     <div class="attachment-chips px-3 pt-2">
       {#each $attachments as attachment, i}
         <div class="attachment-chip">
-          <span class="chip-icon">{attachment.type === 'file' ? '📄' : '📁'}</span>
+          <span class="chip-icon">{attachment.type === 'file' ? '📄' : attachment.type === 'folder' ? '📁' : attachment.type === 'terminal' ? '⬛' : '📏'}</span>
           <span class="chip-name" title={attachment.path}>{attachment.name}</span>
           <button class="chip-remove" onclick={() => removeAttachment(i)} title="Remove">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">

@@ -119,6 +119,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'pickFolder':
           this._handlePickFolder();
           break;
+        case 'pickTerminal':
+          this._handlePickTerminal();
+          break;
+        case 'pickRules':
+          this._handlePickRules();
+          break;
       }
     });
 
@@ -500,6 +506,183 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /** Handle @terminal pick — list active terminals and capture their content */
+  private async _handlePickTerminal() {
+    const terminals = vscode.window.terminals;
+    if (terminals.length === 0) {
+      vscode.window.showWarningMessage('No active terminals found');
+      return;
+    }
+
+    const items = terminals.map((term, idx) => ({
+      label: `⬛ ${term.name}`,
+      description: `Terminal ${idx + 1}`,
+      terminal: term,
+      index: idx,
+    }));
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Select a terminal to attach its output…',
+    });
+
+    if (!selected) return;
+
+    // Use shellIntegration to read recent output if available
+    const term = selected.terminal;
+    let terminalContent = '';
+
+    try {
+      // VS Code 1.93+ shellIntegration API
+      if ((term as any).shellIntegration) {
+        const shellIntegration = (term as any).shellIntegration;
+        // Try to read recent commands
+        if (shellIntegration.executeCommand) {
+          // Fallback: read via clipboard workaround
+          terminalContent = await this._readTerminalViaClipboard(term);
+        } else if (shellIntegration.cwd) {
+          terminalContent = `[Terminal: ${term.name}] CWD: ${shellIntegration.cwd.fsPath}`;
+        }
+      }
+
+      // Fallback: select all text from terminal via clipboard
+      if (!terminalContent) {
+        terminalContent = await this._readTerminalViaClipboard(term);
+      }
+    } catch (e) {
+      console.error('[Hermes] Failed to read terminal output', e);
+      terminalContent = `[Terminal: ${term.name}] (could not capture output)`;
+    }
+
+    // Truncate to 10KB
+    if (terminalContent.length > 10240) {
+      terminalContent = terminalContent.slice(-10240) + '\n... (truncated, showing last ~10KB)';
+    }
+
+    this.postMessage({
+      type: 'attachmentAdded',
+      attachment: {
+        type: 'terminal',
+        name: term.name,
+        path: `terminal://${term.name}`,
+        content: terminalContent,
+      },
+    });
+  }
+
+  /** Read terminal content via clipboard (select all → copy → restore) */
+  private async _readTerminalViaClipboard(terminal: vscode.Terminal): Promise<string> {
+    // Save current clipboard
+    const savedClipboard = await vscode.env.clipboard.readText();
+
+    try {
+      // Focus the terminal, select all, copy
+      terminal.show(false);
+      await new Promise(r => setTimeout(r, 100));
+      await vscode.commands.executeCommand('workbench.action.terminal.selectAll');
+      await new Promise(r => setTimeout(r, 100));
+      await vscode.commands.executeCommand('workbench.action.terminal.copySelection');
+      await new Promise(r => setTimeout(r, 100));
+      // Clear selection
+      await vscode.commands.executeCommand('workbench.action.terminal.clearSelection');
+
+      const content = await vscode.env.clipboard.readText();
+
+      // Restore original clipboard
+      await vscode.env.clipboard.writeText(savedClipboard);
+
+      return content || `[Terminal: ${terminal.name}] (empty or no output)`;
+    } catch {
+      // Restore clipboard on failure
+      await vscode.env.clipboard.writeText(savedClipboard);
+      return `[Terminal: ${terminal.name}] (could not capture output)`;
+    }
+  }
+
+  /** Handle @rules pick — scan for project guidelines/rules files */
+  private async _handlePickRules() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage('No workspace folder open');
+      return;
+    }
+
+    // Known rules/guidelines file patterns
+    const rulePatterns = [
+      '.cursorrules',
+      '.cursorignore',
+      'AGENTS.md',
+      'CLAUDE.md',
+      'COPILOT.md',
+      'RULES.md',
+      'CONVENTIONS.md',
+      'GUIDELINES.md',
+      'CONTRIBUTING.md',
+      'CODING_STANDARDS.md',
+      '.editorconfig',
+      '.eslintrc',
+      '.eslintrc.js',
+      '.eslintrc.json',
+      '.eslintrc.yml',
+      '.prettierrc',
+      '.prettierrc.js',
+      '.prettierrc.json',
+      'eslint.config.js',
+      'eslint.config.mjs',
+      'biome.json',
+      'biome.jsonc',
+      '.stylelintrc',
+      '.stylelintrc.json',
+    ];
+
+    // Search for matching files
+    const foundFiles: Array<{ label: string; description: string; relativePath: string; uri: vscode.Uri }> = [];
+
+    for (const pattern of rulePatterns) {
+      const matches = await vscode.workspace.findFiles(
+        `**/${pattern}`,
+        '{**/node_modules/**,**/dist/**,**/.git/**,**/vendor/**}',
+        5
+      );
+      for (const uri of matches) {
+        const relativePath = vscode.workspace.asRelativePath(uri);
+        foundFiles.push({
+          label: `📏 ${pattern}`,
+          description: relativePath,
+          relativePath,
+          uri,
+        });
+      }
+    }
+
+    if (foundFiles.length === 0) {
+      vscode.window.showInformationMessage('No project rules/guidelines files found');
+      return;
+    }
+
+    // Deduplicate by relativePath
+    const unique = Array.from(
+      new Map(foundFiles.map(f => [f.relativePath, f])).values()
+    ).sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+
+    const selected = await vscode.window.showQuickPick(unique, {
+      placeHolder: 'Select a rules/guidelines file to attach…',
+      canPickMany: true,
+    });
+
+    if (!selected || selected.length === 0) return;
+
+    for (const item of selected) {
+      this.postMessage({
+        type: 'attachmentAdded',
+        attachment: {
+          type: 'rules',
+          name: item.relativePath.split('/').pop() || item.relativePath,
+          path: item.relativePath,
+        },
+      });
+    }
+  }
+
   // ───────────────── Chat Message Handling ─────────────────
 
   /** Handle incoming chat message from user */
@@ -561,7 +744,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    // Inject attachment context from @file / @folder mentions
+    // Inject attachment context from @file / @folder / @terminal / @rules mentions
     if (attachments && attachments.length > 0) {
       for (const att of attachments) {
         if (att.type === 'file') {
@@ -596,6 +779,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
           } catch (e) {
             contextString += `\nAttached Folder: ${att.path} (could not list folder)\n`;
+          }
+        } else if (att.type === 'terminal') {
+          // Terminal content is pre-loaded in the attachment
+          const content = (att as any).content || '(no output captured)';
+          contextString += `\nTerminal Output [${att.name}]:\n\`\`\`\n${content}\n\`\`\`\n`;
+        } else if (att.type === 'rules') {
+          // Rules files — read content like @file
+          try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+            if (workspaceFolder) {
+              const fileUri = vscode.Uri.joinPath(workspaceFolder, att.path);
+              const fileContent = await vscode.workspace.fs.readFile(fileUri);
+              const textContent = new TextDecoder().decode(fileContent);
+              const truncated = textContent.length > 10240
+                ? textContent.slice(0, 10240) + '\n... (truncated, file too large)'
+                : textContent;
+              contextString += `\nProject Rules [${att.name}]:\n\`\`\`\n${truncated}\n\`\`\`\n`;
+            }
+          } catch (e) {
+            contextString += `\nProject Rules: ${att.path} (could not read file)\n`;
           }
         }
       }
