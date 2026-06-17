@@ -96,10 +96,41 @@ export class HermesClient {
 
   /**
    * Mengirim pesan chat dengan SSE streaming menggunakan API /responses agar history context terjaga.
+   * Supports multimodal input (text + images) when images are provided.
    */
-  public async streamChat(message: string, contextString: string, onChunk: (data: string) => void): Promise<void> {
+  public async streamChat(
+    message: string,
+    contextString: string,
+    onChunk: (data: string) => void,
+    images?: Array<{ base64Data: string; mimeType: string }>
+  ): Promise<void> {
     try {
-      const fullMessage = contextString ? `${contextString}\n\nUser: ${message}` : message;
+      const textMessage = contextString ? `${contextString}\n\nUser: ${message}` : message;
+
+      // Build input: multimodal content array if images present, plain string otherwise
+      let input: string | Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }>;
+
+      if (images && images.length > 0) {
+        const contentParts: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [];
+
+        // Add text part
+        contentParts.push({ type: 'input_text', text: textMessage });
+
+        // Add image parts
+        for (const img of images) {
+          contentParts.push({
+            type: 'input_image',
+            image_url: {
+              url: `data:${img.mimeType};base64,${img.base64Data}`,
+              detail: 'auto',
+            },
+          });
+        }
+
+        input = contentParts;
+      } else {
+        input = textMessage;
+      }
 
       const response = await fetch(`${this.apiUrl}/responses`, {
         method: "POST",
@@ -109,7 +140,7 @@ export class HermesClient {
         },
         body: JSON.stringify({
           model: this._model,
-          input: fullMessage,
+          input: input,
           instructions: HermesClient.IDE_INSTRUCTIONS,
           conversation: this.conversationId,
           stream: true

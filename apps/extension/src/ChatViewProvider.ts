@@ -128,6 +128,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'pickUrl':
           this._handlePickUrl();
           break;
+        case 'pickAttachment':
+          this._handlePickAttachment();
+          break;
+        case 'pickImage':
+          this._handlePickImage();
+          break;
       }
     });
 
@@ -820,10 +826,114 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     return text;
   }
 
+  /** Handle [+] attachment button — QuickPick menu for file or image */
+  private async _handlePickAttachment() {
+    const options = [
+      { label: '📄 File', description: 'Attach a file as text context', id: 'file' },
+      { label: '🖼️ Image', description: 'Attach an image for vision analysis', id: 'image' },
+    ];
+
+    const selected = await vscode.window.showQuickPick(options, {
+      placeHolder: 'What would you like to attach?',
+    });
+
+    if (!selected) return;
+
+    if (selected.id === 'file') {
+      this._handlePickFile();
+    } else if (selected.id === 'image') {
+      this._handlePickImage();
+    }
+  }
+
+  /** Handle image pick — QuickPick to search image files in workspace, encode base64 */
+  private async _handlePickImage() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage('No workspace folder open');
+      return;
+    }
+
+    // Find image files in workspace
+    const imageFiles = await vscode.workspace.findFiles(
+      '**/*.{png,jpg,jpeg,gif,webp,svg,bmp,ico}',
+      '{**/node_modules/**,**/dist/**,**/.git/**,**/vendor/**}',
+      200
+    );
+
+    if (imageFiles.length === 0) {
+      vscode.window.showInformationMessage('No image files found in workspace');
+      return;
+    }
+
+    const items = imageFiles.map(uri => {
+      const relativePath = vscode.workspace.asRelativePath(uri);
+      const fileName = uri.path.split('/').pop() || 'image';
+      return {
+        label: `🖼️ ${fileName}`,
+        description: relativePath,
+        uri,
+        relativePath,
+        fileName,
+      };
+    }).sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Search and select an image to attach…',
+      matchOnDescription: true,
+    });
+
+    if (!selected) return;
+
+    try {
+      const fileContent = await vscode.workspace.fs.readFile(selected.uri);
+      const fileSizeKB = fileContent.byteLength / 1024;
+
+      // Limit to 2MB
+      if (fileContent.byteLength > 2 * 1024 * 1024) {
+        vscode.window.showWarningMessage(`Image too large (${(fileSizeKB / 1024).toFixed(1)}MB). Max 2MB.`);
+        return;
+      }
+
+      // Convert to base64
+      const base64 = Buffer.from(fileContent).toString('base64');
+
+      // Determine MIME type
+      const ext = selected.fileName.split('.').pop()?.toLowerCase() || '';
+      const mimeMap: Record<string, string> = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'svg': 'image/svg+xml',
+        'bmp': 'image/bmp',
+        'ico': 'image/x-icon',
+      };
+      const mimeType = mimeMap[ext] || 'image/png';
+
+      this.postMessage({
+        type: 'attachmentAdded',
+        attachment: {
+          type: 'image',
+          name: selected.fileName,
+          path: selected.relativePath,
+          base64Data: base64,
+          mimeType,
+        },
+      });
+
+      vscode.window.showInformationMessage(`Attached image: ${selected.fileName} (${fileSizeKB.toFixed(0)}KB)`);
+    } catch (e) {
+      console.error('[Hermes] Failed to read image', e);
+      vscode.window.showWarningMessage('Failed to read image file');
+    }
+  }
+
   // ───────────────── Chat Message Handling ─────────────────
 
   /** Handle incoming chat message from user */
-  private async _handleChatMessage(text: string, attachments?: Array<{ type: string; name: string; path: string }>) {
+  private async _handleChatMessage(text: string, attachments?: Array<{ type: string; name: string; path: string; content?: string; base64Data?: string; mimeType?: string }>) {
     // Track user message
     const userMsg: SessionMessage = {
       id: `msg-${Date.now()}-user`,
@@ -942,6 +1052,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           const content = (att as any).content || '(no content fetched)';
           contextString += `\nURL Content [${att.path}]:\n\`\`\`\n${content}\n\`\`\`\n`;
         }
+        // image attachments are handled separately below
+      }
+    }
+
+    // Collect image attachments for multimodal
+    const imageAttachments: Array<{ base64Data: string; mimeType: string }> = [];
+    if (attachments && attachments.length > 0) {
+      for (const att of attachments) {
+        if (att.type === 'image' && att.base64Data && att.mimeType) {
+          imageAttachments.push({ base64Data: att.base64Data, mimeType: att.mimeType });
+        }
       }
     }
 
@@ -955,7 +1076,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           content: fullContent,
           status: 'streaming',
         });
-      });
+      }, imageAttachments.length > 0 ? imageAttachments : undefined);
     } catch (e: any) {
       console.error(e);
       fullContent += `\n\nError: ${e.message}`;

@@ -32,11 +32,15 @@ export interface ModelInfo {
 
 /** Context attachment from @ mentions */
 export interface ContextAttachment {
-  type: 'file' | 'folder' | 'terminal' | 'rules' | 'url';
+  type: 'file' | 'folder' | 'terminal' | 'rules' | 'url' | 'image';
   name: string;
   path: string;
   /** Pre-loaded content (used for terminal output) */
   content?: string;
+  /** Base64-encoded data (used for image attachments) */
+  base64Data?: string;
+  /** MIME type (used for image attachments) */
+  mimeType?: string;
 }
 
 /** Message types sent from webview to extension */
@@ -56,7 +60,9 @@ export type OutgoingMessage =
   | { type: 'pickFolder' }
   | { type: 'pickTerminal' }
   | { type: 'pickRules' }
-  | { type: 'pickUrl' };
+  | { type: 'pickUrl' }
+  | { type: 'pickAttachment' }
+  | { type: 'pickImage' };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
