@@ -30,9 +30,16 @@ export interface ModelInfo {
   owned_by: string;
 }
 
+/** Context attachment from @file or @folder mentions */
+export interface ContextAttachment {
+  type: 'file' | 'folder';
+  name: string;
+  path: string;
+}
+
 /** Message types sent from webview to extension */
 export type OutgoingMessage =
-  | { type: 'chatMessage'; value: string }
+  | { type: 'chatMessage'; value: string; attachments?: ContextAttachment[] }
   | { type: 'clearChat' }
   | { type: 'copyCode'; value: string }
   | { type: 'ready' }
@@ -42,7 +49,9 @@ export type OutgoingMessage =
   | { type: 'getSessions' }
   | { type: 'renameSession'; value: { id: string; title: string } }
   | { type: 'getModels' }
-  | { type: 'setModel'; value: { id: string } };
+  | { type: 'setModel'; value: { id: string } }
+  | { type: 'pickFile' }
+  | { type: 'pickFolder' };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
@@ -63,4 +72,6 @@ export type IncomingMessage =
   | { type: 'sessionLoaded'; session: { id: string; title: string; messages: ChatMessage[] } }
   | { type: 'activeSession'; session: { id: string; title: string } }
   | { type: 'modelsLoaded'; models: ModelInfo[]; activeModel: string }
-  | { type: 'modelChanged'; model: string };
+  | { type: 'modelChanged'; model: string }
+  | { type: 'attachmentAdded'; attachment: ContextAttachment }
+  | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] };

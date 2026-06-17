@@ -70,7 +70,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage((data) => {
       switch (data.type) {
         case 'chatMessage':
-          this._handleChatMessage(data.value);
+          this._handleChatMessage(data.value, data.attachments);
           break;
         case 'resolveDiff':
           this._handleResolveDiff(data.value);
@@ -111,6 +111,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'setModel':
           this._handleSetModel(data.value);
+          break;
+        // Context attachment messages (@ mentions)
+        case 'pickFile':
+          this._handlePickFile();
+          break;
+        case 'pickFolder':
+          this._handlePickFolder();
           break;
       }
     });
@@ -377,10 +384,126 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  // ───────────────── Context Attachments (@mentions) ─────────────────
+
+  /** Handle @file pick — QuickPick to search files in workspace */
+  private async _handlePickFile() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage('No workspace folder open');
+      return;
+    }
+
+    // Find all files in workspace (excluding common noise)
+    const files = await vscode.workspace.findFiles(
+      '**/*',
+      '{**/node_modules/**,**/dist/**,**/.git/**,**/vendor/**,**/bun.lock,**/*.vsix}',
+      500
+    );
+
+    const items = files.map(uri => {
+      const relativePath = vscode.workspace.asRelativePath(uri);
+      const fileName = uri.path.split('/').pop() || 'file';
+      return {
+        label: `📄 ${fileName}`,
+        description: relativePath,
+        uri,
+        relativePath,
+        fileName,
+      };
+    }).sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Search and select a file to attach as context…',
+      matchOnDescription: true,
+    });
+
+    if (!selected) return;
+
+    this.postMessage({
+      type: 'attachmentAdded',
+      attachment: {
+        type: 'file',
+        name: selected.fileName,
+        path: selected.relativePath,
+      },
+    });
+  }
+
+  /** Handle @folder pick — QuickPick to search folders in workspace */
+  private async _handlePickFolder() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage('No workspace folder open');
+      return;
+    }
+
+    // Find all directories by searching for any file then extracting unique dirs
+    const files = await vscode.workspace.findFiles(
+      '**/*',
+      '{**/node_modules/**,**/dist/**,**/.git/**,**/vendor/**}',
+      1000
+    );
+
+    // Extract unique directories
+    const dirSet = new Set<string>();
+    for (const uri of files) {
+      const rel = vscode.workspace.asRelativePath(uri);
+      const parts = rel.split('/');
+      // Build all parent dirs
+      for (let i = 1; i < parts.length; i++) {
+        dirSet.add(parts.slice(0, i).join('/'));
+      }
+    }
+
+    const items = Array.from(dirSet)
+      .sort()
+      .map(dirPath => ({
+        label: `📁 ${dirPath.split('/').pop()}`,
+        description: dirPath,
+        dirPath,
+      }));
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Search and select a folder to attach as context…',
+      matchOnDescription: true,
+    });
+
+    if (!selected) return;
+
+    // List files in selected folder
+    const folderUri = vscode.Uri.joinPath(workspaceFolder.uri, selected.dirPath);
+    const folderName = selected.dirPath.split('/').pop() || 'folder';
+
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(folderUri);
+      const fileList = entries
+        .filter(([, type]) => type === vscode.FileType.File)
+        .map(([name]) => ({
+          name,
+          path: `${selected.dirPath}/${name}`,
+        }));
+
+      this.postMessage({
+        type: 'folderFilesAdded',
+        folderName,
+        folderPath: selected.dirPath,
+        files: fileList,
+      });
+    } catch {
+      this.postMessage({
+        type: 'folderFilesAdded',
+        folderName,
+        folderPath: selected.dirPath,
+        files: [],
+      });
+    }
+  }
+
   // ───────────────── Chat Message Handling ─────────────────
 
   /** Handle incoming chat message from user */
-  private async _handleChatMessage(text: string) {
+  private async _handleChatMessage(text: string, attachments?: Array<{ type: string; name: string; path: string }>) {
     // Track user message
     const userMsg: SessionMessage = {
       id: `msg-${Date.now()}-user`,
@@ -434,6 +557,46 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         
         if (errors) {
           contextString += `Current Linter Errors:\n${errors}\n`;
+        }
+      }
+    }
+
+    // Inject attachment context from @file / @folder mentions
+    if (attachments && attachments.length > 0) {
+      for (const att of attachments) {
+        if (att.type === 'file') {
+          try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+            if (workspaceFolder) {
+              const fileUri = vscode.Uri.joinPath(workspaceFolder, att.path);
+              const fileContent = await vscode.workspace.fs.readFile(fileUri);
+              const textContent = new TextDecoder().decode(fileContent);
+              // Limit file content to ~10KB to avoid overwhelming context
+              const truncated = textContent.length > 10240
+                ? textContent.slice(0, 10240) + '\n... (truncated, file too large)'
+                : textContent;
+              contextString += `\nAttached File: ${att.path}\n\`\`\`\n${truncated}\n\`\`\`\n`;
+            }
+          } catch (e) {
+            contextString += `\nAttached File: ${att.path} (could not read file)\n`;
+          }
+        } else if (att.type === 'folder') {
+          try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+            if (workspaceFolder) {
+              const folderUri = vscode.Uri.joinPath(workspaceFolder, att.path);
+              const entries = await vscode.workspace.fs.readDirectory(folderUri);
+              const listing = entries
+                .map(([name, type]) => {
+                  const icon = type === vscode.FileType.Directory ? '📁' : '📄';
+                  return `${icon} ${name}`;
+                })
+                .join('\n');
+              contextString += `\nAttached Folder: ${att.path}\n${listing}\n`;
+            }
+          } catch (e) {
+            contextString += `\nAttached Folder: ${att.path} (could not list folder)\n`;
+          }
         }
       }
     }

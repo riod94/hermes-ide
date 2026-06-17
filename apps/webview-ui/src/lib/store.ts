@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import type { ChatMessage, SessionMeta, ModelInfo } from './types';
+import type { ChatMessage, SessionMeta, ModelInfo, ContextAttachment } from './types';
 
 /** All chat messages */
 export const messages = writable<ChatMessage[]>([]);
@@ -37,6 +37,14 @@ export const activeModel = writable<string>('hermes-agent');
 
 /** Whether model selector dropdown is visible */
 export const showModelSelector = writable(false);
+
+// ───────────────── Attachments State ─────────────────
+
+/** Current context attachments (from @file, @folder mentions) */
+export const attachments = writable<ContextAttachment[]>([]);
+
+/** Whether mention popup is visible */
+export const showMentionPopup = writable(false);
 
 // ───────────────── Message Helpers ─────────────────
 
