@@ -32,7 +32,7 @@ export interface ModelInfo {
 
 /** Context attachment from @ mentions */
 export interface ContextAttachment {
-  type: 'file' | 'folder' | 'terminal' | 'rules';
+  type: 'file' | 'folder' | 'terminal' | 'rules' | 'url';
   name: string;
   path: string;
   /** Pre-loaded content (used for terminal output) */
@@ -55,7 +55,8 @@ export type OutgoingMessage =
   | { type: 'pickFile' }
   | { type: 'pickFolder' }
   | { type: 'pickTerminal' }
-  | { type: 'pickRules' };
+  | { type: 'pickRules' }
+  | { type: 'pickUrl' };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {

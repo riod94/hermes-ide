@@ -14,6 +14,7 @@
     { id: 'folder', label: '@folder', icon: '📁', description: 'Attach folder listing' },
     { id: 'terminal', label: '@terminal', icon: '⬛', description: 'Attach terminal output' },
     { id: 'rules', label: '@rules', icon: '📏', description: 'Attach project rules/guidelines' },
+    { id: 'url', label: '@url', icon: '🔗', description: 'Fetch and attach URL content' },
   ];
 
   let selectedIndex = $state(0);
@@ -61,6 +62,8 @@
       vscode.postMessage({ type: 'pickTerminal' });
     } else if (option.id === 'rules') {
       vscode.postMessage({ type: 'pickRules' });
+    } else if (option.id === 'url') {
+      vscode.postMessage({ type: 'pickUrl' });
     }
     close();
   }
