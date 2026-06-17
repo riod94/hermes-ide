@@ -125,6 +125,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'pickRules':
           this._handlePickRules();
           break;
+        case 'pickUrl':
+          this._handlePickUrl();
+          break;
       }
     });
 
@@ -683,6 +686,140 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /** Handle @url pick — InputBox for URL, fetch content server-side */
+  private async _handlePickUrl() {
+    const url = await vscode.window.showInputBox({
+      placeHolder: 'https://example.com/docs/api',
+      prompt: 'Enter a URL to fetch and attach as context',
+      validateInput: (value) => {
+        if (!value) return 'URL is required';
+        try {
+          const parsed = new URL(value);
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return 'Only http:// and https:// URLs are supported';
+          }
+          return null;
+        } catch {
+          return 'Invalid URL format';
+        }
+      },
+    });
+
+    if (!url) return;
+
+    // Show progress while fetching
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Fetching ${url}…`,
+        cancellable: false,
+      },
+      async () => {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+
+          const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'HermesIDE/1.0',
+              'Accept': 'text/html, text/plain, application/json, */*',
+            },
+            redirect: 'follow',
+          });
+          clearTimeout(timeout);
+
+          if (!response.ok) {
+            vscode.window.showWarningMessage(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+            return;
+          }
+
+          const contentType = response.headers.get('content-type') || '';
+          const rawBody = await response.text();
+          let extractedText: string;
+
+          if (contentType.includes('text/html')) {
+            extractedText = this._stripHtmlToText(rawBody);
+          } else if (contentType.includes('application/json')) {
+            // Pretty-print JSON
+            try {
+              extractedText = JSON.stringify(JSON.parse(rawBody), null, 2);
+            } catch {
+              extractedText = rawBody;
+            }
+          } else {
+            // Plain text, markdown, etc.
+            extractedText = rawBody;
+          }
+
+          // Truncate to 10KB
+          if (extractedText.length > 10240) {
+            extractedText = extractedText.slice(0, 10240) + '\n... (truncated, content too large)';
+          }
+
+          // Derive a short display name from the URL
+          const parsedUrl = new URL(url);
+          const displayName = parsedUrl.hostname + (parsedUrl.pathname !== '/' ? parsedUrl.pathname : '');
+          const shortName = displayName.length > 50 ? displayName.slice(0, 47) + '…' : displayName;
+
+          this.postMessage({
+            type: 'attachmentAdded',
+            attachment: {
+              type: 'url',
+              name: shortName,
+              path: url,
+              content: extractedText,
+            },
+          });
+        } catch (e: any) {
+          if (e.name === 'AbortError') {
+            vscode.window.showWarningMessage('URL fetch timed out (15s limit)');
+          } else {
+            vscode.window.showWarningMessage(`Failed to fetch URL: ${e.message}`);
+          }
+        }
+      }
+    );
+  }
+
+  /** Strip HTML tags and extract readable text */
+  private _stripHtmlToText(html: string): string {
+    // Remove script and style blocks entirely
+    let text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
+
+    // Convert common block elements to newlines
+    text = text
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/?(p|div|h[1-6]|li|tr|blockquote|pre|section|article)[^>]*>/gi, '\n')
+      .replace(/<hr[^>]*>/gi, '\n---\n');
+
+    // Strip all remaining tags
+    text = text.replace(/<[^>]+>/g, '');
+
+    // Decode common HTML entities
+    text = text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code)));
+
+    // Collapse excessive whitespace
+    text = text
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim();
+
+    return text;
+  }
+
   // ───────────────── Chat Message Handling ─────────────────
 
   /** Handle incoming chat message from user */
@@ -800,6 +937,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           } catch (e) {
             contextString += `\nProject Rules: ${att.path} (could not read file)\n`;
           }
+        } else if (att.type === 'url') {
+          // URL content is pre-loaded in the attachment
+          const content = (att as any).content || '(no content fetched)';
+          contextString += `\nURL Content [${att.path}]:\n\`\`\`\n${content}\n\`\`\`\n`;
         }
       }
     }
