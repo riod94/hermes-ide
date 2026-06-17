@@ -30,11 +30,13 @@ export interface ModelInfo {
   owned_by: string;
 }
 
-/** Context attachment from @file or @folder mentions */
+/** Context attachment from @ mentions */
 export interface ContextAttachment {
-  type: 'file' | 'folder';
+  type: 'file' | 'folder' | 'terminal' | 'rules';
   name: string;
   path: string;
+  /** Pre-loaded content (used for terminal output) */
+  content?: string;
 }
 
 /** Message types sent from webview to extension */
@@ -51,7 +53,9 @@ export type OutgoingMessage =
   | { type: 'getModels' }
   | { type: 'setModel'; value: { id: string } }
   | { type: 'pickFile' }
-  | { type: 'pickFolder' };
+  | { type: 'pickFolder' }
+  | { type: 'pickTerminal' }
+  | { type: 'pickRules' };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {

@@ -12,6 +12,8 @@
   const options: MentionOption[] = [
     { id: 'file', label: '@file', icon: '📄', description: 'Attach a file as context' },
     { id: 'folder', label: '@folder', icon: '📁', description: 'Attach folder listing' },
+    { id: 'terminal', label: '@terminal', icon: '⬛', description: 'Attach terminal output' },
+    { id: 'rules', label: '@rules', icon: '📏', description: 'Attach project rules/guidelines' },
   ];
 
   let selectedIndex = $state(0);
@@ -55,6 +57,10 @@
       vscode.postMessage({ type: 'pickFile' });
     } else if (option.id === 'folder') {
       vscode.postMessage({ type: 'pickFolder' });
+    } else if (option.id === 'terminal') {
+      vscode.postMessage({ type: 'pickTerminal' });
+    } else if (option.id === 'rules') {
+      vscode.postMessage({ type: 'pickRules' });
     }
     close();
   }
