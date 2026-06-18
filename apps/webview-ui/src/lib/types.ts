@@ -50,6 +50,7 @@ export interface ContextAttachment {
 /** Message types sent from webview to extension */
 export type OutgoingMessage =
   | { type: 'chatMessage'; value: string; attachments?: ContextAttachment[] }
+  | { type: 'stopGeneration' }
   | { type: 'clearChat' }
   | { type: 'copyCode'; value: string }
   | { type: 'ready' }

@@ -26,15 +26,36 @@
     new_content: string;
   }> = $state([]);
 
-  // Auto-scroll to bottom when new messages arrive
-  $effect(() => {
-    // Track messages length to trigger scroll
-    const _len = $messages.length;
-    const _loading = $isLoading;
+  // Auto-scroll to bottom — smart: only scroll if user is near bottom
+  function isNearBottom(): boolean {
+    if (!chatContainerEl) return true;
+    const threshold = 120;
+    return chatContainerEl.scrollHeight - chatContainerEl.scrollTop - chatContainerEl.clientHeight < threshold;
+  }
+
+  function scrollToBottom() {
     if (chatContainerEl) {
       requestAnimationFrame(() => {
         chatContainerEl!.scrollTop = chatContainerEl!.scrollHeight;
       });
+    }
+  }
+
+  // Scroll on new messages
+  $effect(() => {
+    const _len = $messages.length;
+    scrollToBottom();
+  });
+
+  // Scroll during streaming if user is near bottom
+  $effect(() => {
+    const lastMsg = $messages[$messages.length - 1];
+    if (lastMsg?.status === 'streaming' && lastMsg.content) {
+      // Re-trigger on content change
+      const _content = lastMsg.content;
+      if (isNearBottom()) {
+        scrollToBottom();
+      }
     }
   });
 

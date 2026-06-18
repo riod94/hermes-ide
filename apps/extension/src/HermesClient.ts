@@ -129,7 +129,8 @@ export class HermesClient {
     message: string,
     contextString: string,
     onChunk: (data: string) => void,
-    images?: Array<{ base64Data: string; mimeType: string }>
+    images?: Array<{ base64Data: string; mimeType: string }>,
+    signal?: AbortSignal
   ): Promise<void> {
     try {
       const textMessage = contextString ? `${contextString}\n\nUser: ${message}` : message;
@@ -177,7 +178,8 @@ export class HermesClient {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        signal
       });
 
       // If multimodal request fails (model may not support vision), retry with text-only
@@ -195,7 +197,8 @@ export class HermesClient {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${this.apiKey}`
           },
-          body: JSON.stringify(fallbackBody)
+          body: JSON.stringify(fallbackBody),
+          signal
         });
       }
 
@@ -263,6 +266,10 @@ export class HermesClient {
         }
       }
     } catch (error) {
+      // AbortError = user stopped generation — don't show error
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
       onChunk(`\n\n[Error: ${error instanceof Error ? error.message : "Unknown"}]`);
     }
   }

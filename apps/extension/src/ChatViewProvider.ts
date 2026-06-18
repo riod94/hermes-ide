@@ -39,6 +39,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // Track current messages for session save
   private _currentMessages: SessionMessage[] = [];
 
+  // AbortController for stopping streaming generation
+  private _streamAbortController: AbortController | null = null;
+
   constructor(private readonly _context: vscode.ExtensionContext) {
     this._extensionUri = _context.extensionUri;
     this._hermesClient = new HermesClient();
@@ -139,6 +142,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'retryMessage':
           this._handleRetryMessage();
+          break;
+        case 'stopGeneration':
+          this._handleStopGeneration();
           break;
         case 'unsendMessage':
           this._handleUnsendMessage(data.messageId);
@@ -1009,6 +1015,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // ───────────────── Chat Message Handling ─────────────────
 
   /** Retry the last failed message */
+  /** Stop ongoing streaming generation */
+  private _handleStopGeneration() {
+    if (this._streamAbortController) {
+      this._streamAbortController.abort();
+      this._streamAbortController = null;
+    }
+  }
+
   private async _handleRetryMessage() {
     // Find the last user message in history
     let lastUserMsg: SessionMessage | undefined;
@@ -1329,6 +1343,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     let fullContent = '';
     let hadError = false;
+    let wasStopped = false;
+
+    // Create abort controller for stop generation
+    this._streamAbortController = new AbortController();
+
     try {
       await this._hermesClient.streamChat(text, contextString, (chunk: string) => {
         fullContent += chunk;
@@ -1338,11 +1357,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           content: fullContent,
           status: 'streaming',
         });
-      }, imageAttachments.length > 0 ? imageAttachments : undefined);
+      }, imageAttachments.length > 0 ? imageAttachments : undefined, this._streamAbortController.signal);
     } catch (e: any) {
-      console.error(e);
-      fullContent += `\n\n[Error: ${e.message}]`;
-      hadError = true;
+      if (e.name === 'AbortError') {
+        wasStopped = true;
+        if (fullContent) {
+          fullContent += '\n\n*— Generation stopped —*';
+        }
+      } else {
+        console.error(e);
+        fullContent += `\n\n[Error: ${e.message}]`;
+        hadError = true;
+      }
+    } finally {
+      this._streamAbortController = null;
     }
 
     this.postMessage({
