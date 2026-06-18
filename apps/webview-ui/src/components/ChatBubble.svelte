@@ -2,6 +2,9 @@
   import type { ChatMessage } from '../lib/types';
   import { vscode } from '../lib/vscode';
   import { isLoading } from '../lib/store';
+  import MarkdownRenderer from './MarkdownRenderer.svelte';
+  import CheckpointCard from './CheckpointCard.svelte';
+  import ToolUseCard from './ToolUseCard.svelte';
 
   interface Props {
     message: ChatMessage;
@@ -17,6 +20,7 @@
   const hasError = $derived(
     message.role === 'assistant' && message.content.includes('Error:')
   );
+  const isStreaming = $derived(message.status === 'streaming');
   const timeStr = $derived(
     new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   );
@@ -36,6 +40,177 @@
       default: return '📎';
     }
   }
+
+  // ─────────── Content Parsing ───────────
+
+  /** Checkpoint pattern: ## CHECKPOINT N — Title or ## 📋 CHECKPOINT N — Title */
+  const CHECKPOINT_RE = /^#{1,3}\s*(?:📋|✅|⚠️)?\s*CHECKPOINT\s+(\d+)\s*[—–-]\s*(.+)/im;
+
+  /** Tool use pattern: ⏳ Using tool: tool_name or ⏳ tool_name(args) */
+  const TOOL_USE_RE = /^⏳\s*(?:Using tool:\s*)?(\S+?)(?:\(([^)]*)\))?\s*$/gm;
+
+  /** Checklist item pattern: - [ ] text or - [x] text */
+  const CHECKLIST_RE = /^\s*[-*]\s*\[([ xX])\]\s+(.+)/gm;
+
+  interface ContentSegment {
+    type: 'markdown' | 'checkpoint' | 'toolgroup';
+    content?: string;
+    checkpoint?: {
+      number: number;
+      title: string;
+      body: string;
+      steps: { text: string; checked: boolean }[];
+      actionable: boolean;
+    };
+    tools?: { name: string; status: 'running' | 'done'; args?: string }[];
+  }
+
+  /**
+   * Parse assistant content into structured segments:
+   * - Detects checkpoints and renders as CheckpointCard
+   * - Groups consecutive tool-use lines into ToolUseCard
+   * - Everything else rendered as markdown
+   */
+  function parseContent(raw: string, streaming: boolean): ContentSegment[] {
+    if (!raw) return [];
+
+    const segments: ContentSegment[] = [];
+    const lines = raw.split('\n');
+    let currentBlock: string[] = [];
+    let currentTools: { name: string; status: 'running' | 'done'; args?: string }[] = [];
+    let inCheckpoint = false;
+    let checkpointLines: string[] = [];
+    let checkpointNumber = 0;
+    let checkpointTitle = '';
+
+    function flushMarkdown() {
+      if (currentBlock.length > 0) {
+        const text = currentBlock.join('\n').trim();
+        if (text) {
+          segments.push({ type: 'markdown', content: text });
+        }
+        currentBlock = [];
+      }
+    }
+
+    function flushTools() {
+      if (currentTools.length > 0) {
+        segments.push({ type: 'toolgroup', tools: [...currentTools] });
+        currentTools = [];
+      }
+    }
+
+    function flushCheckpoint() {
+      if (checkpointLines.length > 0) {
+        const body = checkpointLines.join('\n');
+        const steps: { text: string; checked: boolean }[] = [];
+        let match: RegExpExecArray | null;
+        const checklistRe = /^\s*[-*]\s*\[([ xX])\]\s+(.+)/gm;
+        while ((match = checklistRe.exec(body)) !== null) {
+          steps.push({
+            checked: match[1].toLowerCase() === 'x',
+            text: match[2].trim(),
+          });
+        }
+
+        // Checkpoint is actionable if it's a Plan checkpoint that has unchecked steps
+        // or explicitly asks for approval, and we're not streaming
+        const isActionable = !streaming && (
+          /plan/i.test(checkpointTitle) ||
+          /approve|approval|review/i.test(body)
+        );
+
+        segments.push({
+          type: 'checkpoint',
+          checkpoint: {
+            number: checkpointNumber,
+            title: checkpointTitle,
+            body,
+            steps,
+            actionable: isActionable,
+          },
+        });
+        checkpointLines = [];
+        inCheckpoint = false;
+      }
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Check for checkpoint header
+      const cpMatch = line.match(CHECKPOINT_RE);
+      if (cpMatch) {
+        // Flush any previous content
+        flushTools();
+        flushMarkdown();
+        flushCheckpoint();
+
+        inCheckpoint = true;
+        checkpointNumber = parseInt(cpMatch[1], 10);
+        checkpointTitle = cpMatch[2].trim();
+        checkpointLines = [];
+        continue;
+      }
+
+      // If we're inside a checkpoint, collect lines until next heading or end
+      if (inCheckpoint) {
+        // Another top-level heading means checkpoint ended
+        if (/^#{1,3}\s+\S/.test(line) && !CHECKPOINT_RE.test(line)) {
+          flushCheckpoint();
+          // This line is not part of checkpoint — process normally
+          currentBlock.push(line);
+          continue;
+        }
+        checkpointLines.push(line);
+        continue;
+      }
+
+      // Check for tool use line
+      const toolMatch = line.match(/^⏳\s*(?:Using tool:\s*)?(\S+?)(?:\(([^)]*)\))?\s*$/);
+      if (toolMatch) {
+        flushMarkdown();
+        const toolName = toolMatch[1].replace(/[.:]+$/, '');
+        const toolArgs = toolMatch[2] || undefined;
+        // If next line is also a tool or this is the last line → running, otherwise done
+        const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
+        const isLast = i === lines.length - 1;
+        const nextIsTool = /^⏳/.test(nextLine);
+        currentTools.push({
+          name: toolName,
+          status: (isLast && streaming) ? 'running' : 'done',
+          args: toolArgs,
+        });
+        continue;
+      }
+
+      // If we had tool lines and now hit non-tool, flush the tool group
+      if (currentTools.length > 0 && !/^\s*$/.test(line)) {
+        // Set all tools to done since we've moved past them
+        currentTools = currentTools.map(t => ({ ...t, status: 'done' as const }));
+        flushTools();
+      }
+
+      currentBlock.push(line);
+    }
+
+    // Flush remaining content
+    flushCheckpoint();
+    if (currentTools.length > 0) {
+      // Last tool group — if streaming, the last tool is still running
+      if (streaming) {
+        currentTools[currentTools.length - 1].status = 'running';
+      }
+      flushTools();
+    }
+    flushMarkdown();
+
+    return segments;
+  }
+
+  const contentSegments = $derived(
+    isUser ? [] : parseContent(message.content, isStreaming)
+  );
 
   function handleRetry() {
     vscode.postMessage({
@@ -83,12 +258,45 @@
     <div class="bubble-wrapper"
          onmouseenter={() => { if (isUser) showUnsend = true; }}
          onmouseleave={() => showUnsend = false}>
-      <div class="px-3 py-2 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap break-words"
-           style="background: {isUser ? 'var(--color-user-bubble)' : 'var(--color-agent-bubble)'};
-                  color: {isUser ? 'var(--color-btn-fg)' : 'var(--color-fg)'};
-                  border-bottom-{isUser ? 'right' : 'left'}-radius: 4px;">
-        {message.content}
-      </div>
+
+      {#if isUser}
+        <!-- User messages: plain text (no markdown) -->
+        <div class="px-3 py-2 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap break-words"
+             style="background: var(--color-user-bubble);
+                    color: var(--color-btn-fg);
+                    border-bottom-right-radius: 4px;">
+          {message.content}
+        </div>
+      {:else}
+        <!-- Assistant messages: structured rendering -->
+        <div class="assistant-bubble rounded-xl"
+             style="background: var(--color-agent-bubble);
+                    color: var(--color-fg);
+                    border-bottom-left-radius: 4px;">
+          {#if contentSegments.length === 0}
+            <!-- Empty or still loading -->
+            <div class="px-3 py-2">
+              <MarkdownRenderer content={message.content} {isStreaming} />
+            </div>
+          {:else}
+            {#each contentSegments as segment}
+              {#if segment.type === 'markdown' && segment.content}
+                <div class="px-3 py-2">
+                  <MarkdownRenderer content={segment.content} {isStreaming} />
+                </div>
+              {:else if segment.type === 'checkpoint' && segment.checkpoint}
+                <div class="px-1 py-1">
+                  <CheckpointCard checkpoint={segment.checkpoint} {isStreaming} />
+                </div>
+              {:else if segment.type === 'toolgroup' && segment.tools}
+                <div class="px-2 py-1">
+                  <ToolUseCard tools={segment.tools} />
+                </div>
+              {/if}
+            {/each}
+          {/if}
+        </div>
+      {/if}
 
       <!-- Unsend button (visible on hover, only for user messages, not while loading) -->
       {#if isUser && showUnsend && !$isLoading}
@@ -130,6 +338,11 @@
 </div>
 
 <style>
+  /* ── Assistant bubble container ── */
+  .assistant-bubble {
+    overflow: hidden;
+  }
+
   /* ── Attachment chips in bubble ── */
   .bubble-attachments {
     display: flex;

@@ -68,7 +68,9 @@ export type OutgoingMessage =
   | { type: 'localFileAttached'; file: { name: string; fileType: 'file' | 'image'; content?: string; base64Data?: string; mimeType?: string; size: number } }
   | { type: 'retryMessage'; value: string; attachments?: ContextAttachment[] }
   | { type: 'unsendMessage'; messageId: string }
-  | { type: 'showWarning'; value: string };
+  | { type: 'showWarning'; value: string }
+  | { type: 'checkpointAction'; action: 'approve' | 'revise'; checkpoint: number }
+  | { type: 'openLink'; value: string };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
