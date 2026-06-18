@@ -26,6 +26,8 @@ export interface SessionMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  /** Attachments metadata (stored for unsend/restore, no heavy content) */
+  attachments?: Array<{ type: string; name: string; path: string; content?: string; base64Data?: string; mimeType?: string }>;
 }
 
 const MAX_SESSIONS = 50;

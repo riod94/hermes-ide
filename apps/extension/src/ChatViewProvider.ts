@@ -1027,8 +1027,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // Tell webview to remove messages from this index onwards
     this.postMessage({ type: 'removeMessages', fromIndex: msgIdx });
 
-    // Populate the input with the unsent message text
-    this.postMessage({ type: 'populateInput', text: unsendMsg.content });
+    // Populate the input with the unsent message text + restore attachments
+    this.postMessage({
+      type: 'populateInput',
+      text: unsendMsg.content,
+      attachments: unsendMsg.attachments?.map(a => ({
+        type: a.type,
+        name: a.name,
+        path: a.path,
+        content: a.content,
+        base64Data: a.base64Data,
+        mimeType: a.mimeType,
+      })) || [],
+    });
 
     // Auto-save the trimmed session
     await this._autoSaveSession();
@@ -1042,6 +1053,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       role: 'user',
       content: text,
       timestamp: Date.now(),
+      attachments: attachments && attachments.length > 0 ? attachments : undefined,
     };
     this._currentMessages.push(userMsg);
 

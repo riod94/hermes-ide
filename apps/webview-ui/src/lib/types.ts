@@ -93,5 +93,5 @@ export type IncomingMessage =
   | { type: 'attachmentAdded'; attachment: ContextAttachment }
   | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] }
   | { type: 'clearLastError' }
-  | { type: 'populateInput'; text: string }
+  | { type: 'populateInput'; text: string; attachments?: ContextAttachment[] }
   | { type: 'removeMessages'; fromIndex: number };

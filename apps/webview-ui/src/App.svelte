@@ -126,9 +126,13 @@
           break;
         }
         case 'populateInput': {
-          // Pre-fill the chat input with unsent message text
+          // Pre-fill the chat input with unsent message text + restore attachments
           const popMsg = msg as any;
           editText.set(popMsg.text);
+          // Restore attachments to the attachment chips above input
+          if (popMsg.attachments && popMsg.attachments.length > 0) {
+            attachments.set(popMsg.attachments);
+          }
           break;
         }
         case 'removeMessages': {
