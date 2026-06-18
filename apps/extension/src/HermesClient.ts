@@ -109,6 +109,7 @@ export class HermesClient {
 
       // Build input: multimodal content array if images present, plain string otherwise
       let input: string | Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }>;
+      let usingMultimodal = false;
 
       if (images && images.length > 0) {
         const contentParts: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [];
@@ -128,24 +129,46 @@ export class HermesClient {
         }
 
         input = contentParts;
+        usingMultimodal = true;
       } else {
         input = textMessage;
       }
 
-      const response = await fetch(`${this.apiUrl}/responses`, {
+      const requestBody = {
+        model: this._model,
+        input: input,
+        instructions: HermesClient.IDE_INSTRUCTIONS,
+        conversation: this.conversationId,
+        stream: true
+      };
+
+      let response = await fetch(`${this.apiUrl}/responses`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify({
-          model: this._model,
-          input: input,
-          instructions: HermesClient.IDE_INSTRUCTIONS,
-          conversation: this.conversationId,
-          stream: true
-        })
+        body: JSON.stringify(requestBody)
       });
+
+      // If multimodal request fails (model may not support vision), retry with text-only
+      if (!response.ok && usingMultimodal) {
+        console.warn(`[Hermes] Multimodal request failed (${response.status}), retrying as text-only`);
+        const imageCount = images?.length || 0;
+        const fallbackText = textMessage + `\n\n[${imageCount} image(s) attached but current model does not support vision/multimodal input]`;
+        const fallbackBody = {
+          ...requestBody,
+          input: fallbackText,
+        };
+        response = await fetch(`${this.apiUrl}/responses`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${this.apiKey}`
+          },
+          body: JSON.stringify(fallbackBody)
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`API error: ${response.statusText}`);

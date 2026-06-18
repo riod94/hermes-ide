@@ -1037,20 +1037,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (attachments && attachments.length > 0) {
       for (const att of attachments) {
         if (att.type === 'file') {
-          try {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
-            if (workspaceFolder) {
-              const fileUri = vscode.Uri.joinPath(workspaceFolder, att.path);
-              const fileContent = await vscode.workspace.fs.readFile(fileUri);
-              const textContent = new TextDecoder().decode(fileContent);
-              // Limit file content to ~10KB to avoid overwhelming context
-              const truncated = textContent.length > 10240
-                ? textContent.slice(0, 10240) + '\n... (truncated, file too large)'
-                : textContent;
-              contextString += `\nAttached File: ${att.path}\n\`\`\`\n${truncated}\n\`\`\`\n`;
+          // If content is already pre-loaded (e.g. from local upload), use it directly
+          if (att.content) {
+            const truncated = att.content.length > 10240
+              ? att.content.slice(0, 10240) + '\n... (truncated, file too large)'
+              : att.content;
+            contextString += `\nAttached File: ${att.name}\n\`\`\`\n${truncated}\n\`\`\`\n`;
+          } else {
+            try {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+              if (workspaceFolder) {
+                const fileUri = vscode.Uri.joinPath(workspaceFolder, att.path);
+                const fileContent = await vscode.workspace.fs.readFile(fileUri);
+                const textContent = new TextDecoder().decode(fileContent);
+                // Limit file content to ~10KB to avoid overwhelming context
+                const truncated = textContent.length > 10240
+                  ? textContent.slice(0, 10240) + '\n... (truncated, file too large)'
+                  : textContent;
+                contextString += `\nAttached File: ${att.path}\n\`\`\`\n${truncated}\n\`\`\`\n`;
+              }
+            } catch (e) {
+              contextString += `\nAttached File: ${att.path} (could not read file)\n`;
             }
-          } catch (e) {
-            contextString += `\nAttached File: ${att.path} (could not read file)\n`;
           }
         } else if (att.type === 'folder') {
           try {
