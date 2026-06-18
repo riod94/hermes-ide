@@ -10,51 +10,201 @@
 
   let { disabled = false }: Props = $props();
 
-  let inputText = $state('');
-  let textareaEl: HTMLTextAreaElement | undefined = $state();
+  let editorEl: HTMLDivElement | undefined = $state();
   let mentionPopupComponent: MentionPopup | undefined = $state();
   let showAttachMenu = $state(false);
   let fileInputEl: HTMLInputElement | undefined = $state();
 
+  // ─── Rich text helpers ───
+
+  /** Get plain text from contenteditable, preserving chip placeholders */
+  function getPlainText(): string {
+    if (!editorEl) return '';
+    let text = '';
+    for (const node of editorEl.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.textContent || '';
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.classList.contains('inline-chip')) {
+          // Reconstruct the chip reference for display
+          const chipType = el.getAttribute('data-chip-type') || 'selection';
+          const chipName = el.getAttribute('data-chip-name') || '';
+          if (chipType === 'selection') {
+            text += `✂️ ${chipName}`;
+          } else {
+            text += chipName;
+          }
+        } else if (el.tagName === 'BR') {
+          text += '\n';
+        } else {
+          text += el.textContent || '';
+        }
+      }
+    }
+    return text;
+  }
+
+  /** Extract inline selection chips from contenteditable as attachments */
+  function extractInlineChips(): ContextAttachment[] {
+    if (!editorEl) return [];
+    const chips: ContextAttachment[] = [];
+    const chipEls = editorEl.querySelectorAll('.inline-chip');
+    chipEls.forEach((el) => {
+      const chipData = el.getAttribute('data-chip-json');
+      if (chipData) {
+        try {
+          chips.push(JSON.parse(chipData));
+        } catch {}
+      }
+    });
+    return chips;
+  }
+
+  /** Check if editor is empty */
+  function isEditorEmpty(): boolean {
+    if (!editorEl) return true;
+    const text = editorEl.textContent?.trim() || '';
+    const hasChips = editorEl.querySelectorAll('.inline-chip').length > 0;
+    return text === '' && !hasChips;
+  }
+
+  /** Insert an inline chip at the current cursor position */
+  function insertChipAtCursor(attachment: ContextAttachment) {
+    if (!editorEl) return;
+    editorEl.focus();
+
+    const chip = createChipElement(attachment);
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      // Only insert if cursor is inside our editor
+      if (editorEl.contains(range.commonAncestorContainer)) {
+        range.deleteContents();
+        range.insertNode(chip);
+        // Move cursor after the chip
+        range.setStartAfter(chip);
+        range.setEndAfter(chip);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        // Cursor not in editor — append at end
+        editorEl.appendChild(chip);
+        placeCaretAtEnd();
+      }
+    } else {
+      editorEl.appendChild(chip);
+      placeCaretAtEnd();
+    }
+  }
+
+  /** Create a chip DOM element */
+  function createChipElement(attachment: ContextAttachment): HTMLSpanElement {
+    const chip = document.createElement('span');
+    chip.className = 'inline-chip';
+    chip.contentEditable = 'false';
+    chip.setAttribute('data-chip-type', attachment.type);
+    chip.setAttribute('data-chip-name', attachment.name);
+    chip.setAttribute('data-chip-json', JSON.stringify(attachment));
+
+    // Icon
+    const icon = document.createElement('span');
+    icon.className = 'inline-chip-icon';
+    icon.textContent = attachment.type === 'selection' ? '✂️' : '📄';
+    chip.appendChild(icon);
+
+    // Label
+    const label = document.createElement('span');
+    label.className = 'inline-chip-label';
+    label.textContent = attachment.name;
+    chip.appendChild(label);
+
+    // Remove button
+    const removeBtn = document.createElement('span');
+    removeBtn.className = 'inline-chip-remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      chip.remove();
+    });
+    chip.appendChild(removeBtn);
+
+    return chip;
+  }
+
+  /** Place caret at end of contenteditable */
+  function placeCaretAtEnd() {
+    if (!editorEl) return;
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    range.selectNodeContents(editorEl);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  // ─── Core handlers ───
+
   // Watch editText store for unsend/edit population
   $effect(() => {
     const text = $editText;
-    if (text) {
-      inputText = text;
+    if (text && editorEl) {
+      editorEl.textContent = text;
       editText.set('');
-      // Focus and auto-resize after next tick
       requestAnimationFrame(() => {
-        if (textareaEl) {
-          textareaEl.focus();
+        if (editorEl) {
+          editorEl.focus();
+          placeCaretAtEnd();
           autoResize();
         }
       });
     }
   });
 
-  function send() {
-    const trimmed = inputText.trim();
-    if (!trimmed || disabled) return;
+  // Listen for selection attachments from extension host
+  // When attachmentAdded fires for type=selection, insert inline instead of adding to attachment bar
+  $effect(() => {
+    function handleSelectionAttachment(e: MessageEvent) {
+      const msg = e.data;
+      if (msg?.type === 'attachmentAdded' && msg.attachment?.type === 'selection') {
+        insertChipAtCursor(msg.attachment);
+      }
+    }
+    window.addEventListener('message', handleSelectionAttachment);
+    return () => window.removeEventListener('message', handleSelectionAttachment);
+  });
 
-    // Collect current attachments
-    let currentAttachments: ContextAttachment[] = [];
-    attachments.subscribe((v: ContextAttachment[]) => currentAttachments = v)();
+  function send() {
+    if (isEditorEmpty() || disabled) return;
+
+    const plainText = getPlainText().trim();
+    if (!plainText) return;
+
+    // Collect attachments: inline chips + attachment bar items
+    const inlineChips = extractInlineChips();
+    let barAttachments: ContextAttachment[] = [];
+    attachments.subscribe((v: ContextAttachment[]) => barAttachments = v)();
+    const allAttachments = [...barAttachments, ...inlineChips];
 
     vscode.postMessage({
       type: 'chatMessage',
-      value: trimmed,
-      attachments: currentAttachments.length > 0 ? currentAttachments : undefined,
+      value: plainText,
+      attachments: allAttachments.length > 0 ? allAttachments : undefined,
     });
-    inputText = '';
 
-    // Clear attachments after sending
+    // Clear editor
+    if (editorEl) {
+      editorEl.innerHTML = '';
+    }
+
+    // Clear attachment bar
     attachments.set([]);
     showMentionPopup.set(false);
 
-    // Reset textarea height
-    if (textareaEl) {
-      textareaEl.style.height = 'auto';
-    }
+    autoResize();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -75,17 +225,29 @@
   }
 
   function autoResize() {
-    if (!textareaEl) return;
-    textareaEl.style.height = 'auto';
-    textareaEl.style.height = Math.min(textareaEl.scrollHeight, 150) + 'px';
+    if (!editorEl) return;
+    editorEl.style.height = 'auto';
+    editorEl.style.height = Math.min(editorEl.scrollHeight, 150) + 'px';
   }
 
   function detectMention() {
-    if (!textareaEl) return;
-    const cursorPos = textareaEl.selectionStart;
-    const textBeforeCursor = inputText.slice(0, cursorPos);
+    if (!editorEl) return;
 
-    // Check if there's an @ that starts a mention (@ at start or after whitespace)
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    if (!editorEl.contains(range.commonAncestorContainer)) return;
+
+    // Get text before cursor in the current text node
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) {
+      showMentionPopup.set(false);
+      mentionPopupComponent?.reset();
+      return;
+    }
+
+    const textBeforeCursor = (node.textContent || '').slice(0, range.startOffset);
     const atMatch = textBeforeCursor.match(/(?:^|\s)@(\w*)$/);
     if (atMatch) {
       showMentionPopup.set(true);
@@ -100,38 +262,47 @@
     attachments.update((items: ContextAttachment[]) => items.filter((_: ContextAttachment, i: number) => i !== index));
   }
 
-  /** Strip @mention text from input after picker opens */
+  /** Strip @mention text from input after picker selects */
   function stripMentionText() {
-    if (!textareaEl) return;
-    const cursorPos = textareaEl.selectionStart;
-    const textBeforeCursor = inputText.slice(0, cursorPos);
+    if (!editorEl) return;
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) return;
+
+    const text = node.textContent || '';
+    const cursorPos = range.startOffset;
+    const textBeforeCursor = text.slice(0, cursorPos);
     const atMatch = textBeforeCursor.match(/(?:^|\s)@\w*$/);
     if (atMatch) {
       const matchStart = textBeforeCursor.length - atMatch[0].length;
-      // Keep leading whitespace if it was a space+@ match
       const keepLeading = atMatch[0].startsWith(' ') ? matchStart + 1 : matchStart;
-      inputText = inputText.slice(0, matchStart === 0 ? 0 : keepLeading) + inputText.slice(cursorPos);
+      const start = matchStart === 0 ? 0 : keepLeading;
+      node.textContent = text.slice(0, start) + text.slice(cursorPos);
+      // Restore cursor position
+      const newRange = document.createRange();
+      newRange.setStart(node, start);
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
     }
   }
-
-  // Listen for attachmentAdded from extension host
-  // (message handler is in App.svelte, which updates the store)
 
   function toggleModelSelector() {
     showModelSelector.update((v: boolean) => !v);
   }
 
-  /** Display short model name (strip prefix like gc/, ag/, kr/) */
   function shortModelName(modelId: string): string {
     const slashIndex = modelId.indexOf('/');
     return slashIndex > -1 ? modelId.slice(slashIndex + 1) : modelId;
   }
 
-  /** Strip mention text when popup closes due to a pick */
   $effect(() => {
-    // When mention popup closes, clean up @ text in input
     if (!$showMentionPopup) {
-      // Small delay to avoid racing with the pick action
+      // Mention popup closed
     }
   });
 
@@ -144,7 +315,6 @@
         showAttachMenu = false;
       }
     }
-    // Delay to avoid immediate close from the same click
     const timer = setTimeout(() => {
       document.addEventListener('click', handleClickOutside);
     }, 10);
@@ -161,7 +331,7 @@
   function triggerFileUpload() {
     showAttachMenu = false;
     if (fileInputEl) {
-      fileInputEl.value = ''; // Reset so same file can be re-selected
+      fileInputEl.value = '';
       fileInputEl.click();
     }
   }
@@ -171,13 +341,11 @@
     vscode.postMessage({ type: 'pickAttachment' });
   }
 
-  /** Image MIME types for detection */
   const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
   const IMAGE_MIME_PREFIXES = ['image/'];
-  const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB (uniform for all file types)
+  const MAX_FILE_SIZE = 2 * 1024 * 1024;
   const MAX_FILES = 5;
 
-  /** Show warning via extension host (alert() is blocked in webview CSP) */
   function showWarning(msg: string) {
     vscode.postMessage({ type: 'showWarning', value: msg });
   }
@@ -187,14 +355,12 @@
     const files = input.files;
     if (!files || files.length === 0) return;
 
-    // Check max files limit
     if (files.length > MAX_FILES) {
       showWarning(`Max ${MAX_FILES} files at a time. You selected ${files.length}.`);
       input.value = '';
       return;
     }
 
-    // Count existing attachments to enforce total limit
     let currentCount = 0;
     attachments.subscribe((v: ContextAttachment[]) => currentCount = v.length)();
     if (currentCount + files.length > MAX_FILES) {
@@ -203,7 +369,6 @@
       return;
     }
 
-    // Process each selected file
     const oversized: string[] = [];
     const validFiles: File[] = [];
     for (let i = 0; i < files.length; i++) {
@@ -215,12 +380,10 @@
       }
     }
 
-    // Warn about oversized files
     if (oversized.length > 0) {
       showWarning(`Files exceed 2MB limit:\n${oversized.join('\n')}`);
     }
 
-    // Process valid files
     for (const file of validFiles) {
       processFile(file);
     }
@@ -269,13 +432,22 @@
       reader.readAsText(file);
     }
   }
+
+  /** Prevent pasting rich content — strip to plain text */
+  function handlePaste(e: ClipboardEvent) {
+    e.preventDefault();
+    const text = e.clipboardData?.getData('text/plain') || '';
+    if (text) {
+      document.execCommand('insertText', false, text);
+    }
+  }
 </script>
 
 <div class="input-container border-t" style="border-color: var(--color-border); background: var(--color-sidebar);">
-  <!-- Attachment chips (above textarea) -->
-  {#if $attachments.length > 0}
+  <!-- Attachment chips bar (file/folder/image/url/terminal — NOT selection) -->
+  {#if $attachments.filter(a => a.type !== 'selection').length > 0}
     <div class="attachment-chips px-3 pt-2">
-      {#each $attachments as attachment, i}
+      {#each $attachments.filter(a => a.type !== 'selection') as attachment, i}
         <div class="attachment-chip">
           <span class="chip-icon">{attachment.type === 'file' ? '📄' : attachment.type === 'folder' ? '📁' : attachment.type === 'terminal' ? '⬛' : attachment.type === 'url' ? '🔗' : attachment.type === 'image' ? '🖼️' : '📏'}</span>
           <span class="chip-name" title={attachment.path}>{attachment.name}</span>
@@ -290,34 +462,42 @@
     </div>
   {/if}
 
-  <!-- Input row: textarea + send button (with mention popup anchor) -->
+  <!-- Input row: rich text editor + send button -->
   <div class="input-row-wrapper" style="position: relative;">
     <MentionPopup bind:this={mentionPopupComponent} />
 
     <div class="flex items-end gap-2 px-3 pt-3 pb-1">
-      <textarea
-        bind:this={textareaEl}
-        bind:value={inputText}
+      <!-- Rich text input (contenteditable) -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        bind:this={editorEl}
+        contenteditable="true"
+        role="textbox"
+        tabindex="0"
+        aria-label="Chat Input"
+        aria-multiline="true"
         onkeydown={handleKeydown}
         oninput={handleInput}
-        placeholder="Ask Hermes something… (type @ for context)"
-        rows="1"
-        {disabled}
-        class="flex-1 resize-none rounded-lg px-3 py-2 text-[13px] leading-normal outline-none transition-colors placeholder:opacity-50"
+        onpaste={handlePaste}
+        data-placeholder="Ask Hermes something… (type @ for context)"
+        class="rich-input flex-1 rounded-lg px-3 py-2 text-[13px] leading-normal outline-none transition-colors"
         style="background: var(--color-input-bg);
                color: var(--color-input-fg);
                border: 1px solid var(--color-input-border);
-               max-height: 150px;"
-      ></textarea>
+               max-height: 150px;
+               overflow-y: auto;
+               min-height: 36px;
+               white-space: pre-wrap;
+               word-break: break-word;"
+      ></div>
 
       <button
         onclick={send}
-        disabled={disabled || !inputText.trim()}
+        disabled={disabled}
         class="flex-shrink-0 rounded-lg p-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         style="background: var(--color-btn-bg); color: var(--color-btn-fg);"
         title="Send (Enter)"
       >
-        <!-- Send icon (arrow up) -->
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="19" x2="12" y2="5"></line>
           <polyline points="5 12 12 5 19 12"></polyline>
@@ -326,10 +506,9 @@
     </div>
   </div>
 
-  <!-- Toolbar row: [+] attachment ... [model selector] -->
+  <!-- Toolbar row -->
   <div class="toolbar-row flex items-center justify-between px-3 pb-2 pt-1">
     <div class="flex items-center gap-1">
-      <!-- Attachment button [+] with dropdown menu -->
       <div class="attach-menu-container" style="position: relative;">
         <button
           class="toolbar-btn"
@@ -367,7 +546,6 @@
       </div>
     </div>
 
-    <!-- Hidden file input for local upload (multiple, max 5) -->
     <input
       bind:this={fileInputEl}
       type="file"
@@ -378,7 +556,6 @@
     />
 
     <div class="flex items-center gap-1">
-      <!-- Model selector badge -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="model-badge" onclick={toggleModelSelector} title="Switch model">
@@ -464,7 +641,7 @@
     flex-shrink: 0;
   }
 
-  /* ── Attachment chips ── */
+  /* ── Attachment chips (bar above input) ── */
   .attachment-chips {
     display: flex;
     flex-wrap: wrap;
@@ -513,6 +690,65 @@
   }
 
   .chip-remove:hover {
+    background: var(--color-border);
+    color: var(--color-fg);
+  }
+
+  /* ── Rich text input (contenteditable) ── */
+  .rich-input:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-muted);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* ── Inline chips inside rich input ── */
+  :global(.inline-chip) {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px 1px 4px;
+    margin: 0 2px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--color-btn-bg) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-btn-bg) 40%, transparent);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--color-fg);
+    vertical-align: baseline;
+    cursor: default;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  :global(.inline-chip-icon) {
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  :global(.inline-chip-label) {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.inline-chip-remove) {
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--color-muted);
+    margin-left: 1px;
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s;
+  }
+
+  :global(.inline-chip-remove:hover) {
     background: var(--color-border);
     color: var(--color-fg);
   }
