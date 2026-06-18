@@ -10,7 +10,7 @@
     messages, isLoading, updateMessage, clearMessages,
     sessions, activeSessionId, activeSessionTitle, showSessionList,
     models, activeModel, showModelSelector,
-    attachments,
+    attachments, editText,
   } from './lib/store';
   import { vscode } from './lib/vscode';
   import type { IncomingMessage } from './lib/types';
@@ -110,6 +110,35 @@
             name: folderMsg.folderName,
             path: folderMsg.folderPath,
           }]);
+          break;
+        }
+        case 'clearLastError': {
+          // Remove last error assistant message for retry
+          messages.update((msgs) => {
+            // Find last message with error status or error content
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].role === 'assistant' && (msgs[i].status === 'error' || msgs[i].content.includes('[Error:'))) {
+                return msgs.filter((_, idx) => idx !== i);
+              }
+            }
+            return msgs;
+          });
+          break;
+        }
+        case 'populateInput': {
+          // Pre-fill the chat input with unsent message text + restore attachments
+          const popMsg = msg as any;
+          editText.set(popMsg.text);
+          // Restore attachments to the attachment chips above input
+          if (popMsg.attachments && popMsg.attachments.length > 0) {
+            attachments.set(popMsg.attachments);
+          }
+          break;
+        }
+        case 'removeMessages': {
+          // Remove messages from a certain index onwards (for unsend rollback)
+          const rmMsg = msg as any;
+          messages.update((msgs) => msgs.slice(0, rmMsg.fromIndex));
           break;
         }
       }

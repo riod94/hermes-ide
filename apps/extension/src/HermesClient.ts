@@ -96,25 +96,81 @@ export class HermesClient {
 
   /**
    * Mengirim pesan chat dengan SSE streaming menggunakan API /responses agar history context terjaga.
+   * Supports multimodal input (text + images) when images are provided.
    */
-  public async streamChat(message: string, contextString: string, onChunk: (data: string) => void): Promise<void> {
+  public async streamChat(
+    message: string,
+    contextString: string,
+    onChunk: (data: string) => void,
+    images?: Array<{ base64Data: string; mimeType: string }>
+  ): Promise<void> {
     try {
-      const fullMessage = contextString ? `${contextString}\n\nUser: ${message}` : message;
+      const textMessage = contextString ? `${contextString}\n\nUser: ${message}` : message;
 
-      const response = await fetch(`${this.apiUrl}/responses`, {
+      // Build input: for multimodal, wrap content parts in a message object with role
+      // Hermes Responses API expects: [{role: "user", content: [...parts...]}]
+      let input: string | Array<{ role: string; content: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> }>;
+      let usingMultimodal = false;
+
+      if (images && images.length > 0) {
+        const contentParts: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [];
+
+        // Add text part
+        contentParts.push({ type: 'input_text', text: textMessage });
+
+        // Add image parts
+        for (const img of images) {
+          contentParts.push({
+            type: 'input_image',
+            image_url: {
+              url: `data:${img.mimeType};base64,${img.base64Data}`,
+              detail: 'auto',
+            },
+          });
+        }
+
+        // Wrap in message object — API expects [{role, content}] not bare parts array
+        input = [{ role: 'user', content: contentParts }];
+        usingMultimodal = true;
+      } else {
+        input = textMessage;
+      }
+
+      const requestBody = {
+        model: this._model,
+        input: input,
+        instructions: HermesClient.IDE_INSTRUCTIONS,
+        conversation: this.conversationId,
+        stream: true
+      };
+
+      let response = await fetch(`${this.apiUrl}/responses`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify({
-          model: this._model,
-          input: fullMessage,
-          instructions: HermesClient.IDE_INSTRUCTIONS,
-          conversation: this.conversationId,
-          stream: true
-        })
+        body: JSON.stringify(requestBody)
       });
+
+      // If multimodal request fails (model may not support vision), retry with text-only
+      if (!response.ok && usingMultimodal) {
+        console.warn(`[Hermes] Multimodal request failed (${response.status}), retrying as text-only`);
+        const imageCount = images?.length || 0;
+        const fallbackText = textMessage + `\n\n[${imageCount} image(s) attached but current model does not support vision/multimodal input]`;
+        const fallbackBody = {
+          ...requestBody,
+          input: fallbackText,
+        };
+        response = await fetch(`${this.apiUrl}/responses`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${this.apiKey}`
+          },
+          body: JSON.stringify(fallbackBody)
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`API error: ${response.statusText}`);

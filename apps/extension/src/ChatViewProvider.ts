@@ -128,6 +128,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'pickUrl':
           this._handlePickUrl();
           break;
+        case 'pickAttachment':
+          this._handlePickAttachment();
+          break;
+        case 'pickImage':
+          this._handlePickImage();
+          break;
+        case 'localFileAttached':
+          this._handleLocalFileAttached(data.file);
+          break;
+        case 'retryMessage':
+          this._handleRetryMessage();
+          break;
+        case 'unsendMessage':
+          this._handleUnsendMessage(data.messageId);
+          break;
+        case 'showWarning':
+          vscode.window.showWarningMessage(data.value);
+          break;
       }
     });
 
@@ -820,24 +838,237 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     return text;
   }
 
+  /** Handle [+] attachment button — QuickPick menu for file or image */
+  private async _handlePickAttachment() {
+    const options = [
+      { label: '📄 File', description: 'Attach a file as text context', id: 'file' },
+      { label: '🖼️ Image', description: 'Attach an image for vision analysis', id: 'image' },
+    ];
+
+    const selected = await vscode.window.showQuickPick(options, {
+      placeHolder: 'What would you like to attach?',
+    });
+
+    if (!selected) return;
+
+    if (selected.id === 'file') {
+      this._handlePickFile();
+    } else if (selected.id === 'image') {
+      this._handlePickImage();
+    }
+  }
+
+  /** Handle image pick — QuickPick to search image files in workspace, encode base64 */
+  private async _handlePickImage() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage('No workspace folder open');
+      return;
+    }
+
+    // Find image files in workspace
+    const imageFiles = await vscode.workspace.findFiles(
+      '**/*.{png,jpg,jpeg,gif,webp,svg,bmp,ico}',
+      '{**/node_modules/**,**/dist/**,**/.git/**,**/vendor/**}',
+      200
+    );
+
+    if (imageFiles.length === 0) {
+      vscode.window.showInformationMessage('No image files found in workspace');
+      return;
+    }
+
+    const items = imageFiles.map(uri => {
+      const relativePath = vscode.workspace.asRelativePath(uri);
+      const fileName = uri.path.split('/').pop() || 'image';
+      return {
+        label: `🖼️ ${fileName}`,
+        description: relativePath,
+        uri,
+        relativePath,
+        fileName,
+      };
+    }).sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Search and select an image to attach…',
+      matchOnDescription: true,
+    });
+
+    if (!selected) return;
+
+    try {
+      const fileContent = await vscode.workspace.fs.readFile(selected.uri);
+      const fileSizeKB = fileContent.byteLength / 1024;
+
+      // Limit to 2MB
+      if (fileContent.byteLength > 2 * 1024 * 1024) {
+        vscode.window.showWarningMessage(`Image too large (${(fileSizeKB / 1024).toFixed(1)}MB). Max 2MB.`);
+        return;
+      }
+
+      // Convert to base64
+      const base64 = Buffer.from(fileContent).toString('base64');
+
+      // Determine MIME type
+      const ext = selected.fileName.split('.').pop()?.toLowerCase() || '';
+      const mimeMap: Record<string, string> = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'svg': 'image/svg+xml',
+        'bmp': 'image/bmp',
+        'ico': 'image/x-icon',
+      };
+      const mimeType = mimeMap[ext] || 'image/png';
+
+      this.postMessage({
+        type: 'attachmentAdded',
+        attachment: {
+          type: 'image',
+          name: selected.fileName,
+          path: selected.relativePath,
+          base64Data: base64,
+          mimeType,
+        },
+      });
+
+      vscode.window.showInformationMessage(`Attached image: ${selected.fileName} (${fileSizeKB.toFixed(0)}KB)`);
+    } catch (e) {
+      console.error('[Hermes] Failed to read image', e);
+      vscode.window.showWarningMessage('Failed to read image file');
+    }
+  }
+
+  /** Handle local file uploaded from browser file picker */
+  private _handleLocalFileAttached(file: {
+    name: string;
+    fileType: 'file' | 'image';
+    content?: string;
+    base64Data?: string;
+    mimeType?: string;
+    size: number;
+  }) {
+    const sizeLabel = file.size > 1024
+      ? `${(file.size / 1024).toFixed(0)}KB`
+      : `${file.size}B`;
+
+    if (file.fileType === 'image') {
+      this.postMessage({
+        type: 'attachmentAdded',
+        attachment: {
+          type: 'image',
+          name: file.name,
+          path: `(uploaded) ${file.name}`,
+          base64Data: file.base64Data,
+          mimeType: file.mimeType,
+        },
+      });
+      vscode.window.showInformationMessage(`Attached image: ${file.name} (${sizeLabel})`);
+    } else {
+      this.postMessage({
+        type: 'attachmentAdded',
+        attachment: {
+          type: 'file',
+          name: file.name,
+          path: `(uploaded) ${file.name}`,
+          content: file.content,
+        },
+      });
+      vscode.window.showInformationMessage(`Attached file: ${file.name} (${sizeLabel})`);
+    }
+  }
+
   // ───────────────── Chat Message Handling ─────────────────
 
+  /** Retry the last failed message */
+  private async _handleRetryMessage() {
+    // Find the last user message in history
+    let lastUserMsg: SessionMessage | undefined;
+    let lastUserIdx = -1;
+    for (let i = this._currentMessages.length - 1; i >= 0; i--) {
+      if (this._currentMessages[i].role === 'user') {
+        lastUserMsg = this._currentMessages[i];
+        lastUserIdx = i;
+        break;
+      }
+    }
+
+    if (!lastUserMsg) return;
+
+    // Remove the error assistant message(s) after last user message
+    this._currentMessages = this._currentMessages.slice(0, lastUserIdx + 1);
+
+    // Clear error messages from webview and re-send
+    this.postMessage({ type: 'clearLastError' });
+
+    // Re-send the same message (without attachments since context was already built)
+    // We call _handleChatMessage again which will rebuild context
+    await this._handleChatMessage(lastUserMsg.content);
+  }
+
+  /** Unsend a user message — rollback conversation and populate input for editing */
+  private async _handleUnsendMessage(messageId: string) {
+    // Find the message index in history
+    const msgIdx = this._currentMessages.findIndex(m => m.id === messageId);
+    if (msgIdx === -1) return;
+
+    const unsendMsg = this._currentMessages[msgIdx];
+    if (unsendMsg.role !== 'user') return;
+
+    // Remove this message and everything after it (including assistant response)
+    this._currentMessages = this._currentMessages.slice(0, msgIdx);
+
+    // Also reset conversation history on HermesClient — rebuild from remaining messages
+    this._hermesClient.resetConversation();
+
+    // Tell webview to remove messages from this index onwards
+    this.postMessage({ type: 'removeMessages', fromIndex: msgIdx });
+
+    // Populate the input with the unsent message text + restore attachments
+    this.postMessage({
+      type: 'populateInput',
+      text: unsendMsg.content,
+      attachments: unsendMsg.attachments?.map(a => ({
+        type: a.type,
+        name: a.name,
+        path: a.path,
+        content: a.content,
+        base64Data: a.base64Data,
+        mimeType: a.mimeType,
+      })) || [],
+    });
+
+    // Auto-save the trimmed session
+    await this._autoSaveSession();
+  }
+
   /** Handle incoming chat message from user */
-  private async _handleChatMessage(text: string, attachments?: Array<{ type: string; name: string; path: string }>) {
-    // Track user message
+  private async _handleChatMessage(text: string, attachments?: Array<{ type: string; name: string; path: string; content?: string; base64Data?: string; mimeType?: string }>) {
+    // Track user message (include attachments metadata for display)
     const userMsg: SessionMessage = {
       id: `msg-${Date.now()}-user`,
       role: 'user',
       content: text,
       timestamp: Date.now(),
+      attachments: attachments && attachments.length > 0 ? attachments : undefined,
     };
     this._currentMessages.push(userMsg);
 
+    // Send user message with attachment info for bubble display
     this.postMessage({
       type: 'addMessage',
       message: {
         ...userMsg,
         status: 'done',
+        attachments: attachments?.map(a => ({
+          type: a.type,
+          name: a.name,
+          path: a.path,
+          // Don't send base64/content to webview display — too heavy
+        })) || undefined,
       },
     });
 
@@ -885,20 +1116,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (attachments && attachments.length > 0) {
       for (const att of attachments) {
         if (att.type === 'file') {
-          try {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
-            if (workspaceFolder) {
-              const fileUri = vscode.Uri.joinPath(workspaceFolder, att.path);
-              const fileContent = await vscode.workspace.fs.readFile(fileUri);
-              const textContent = new TextDecoder().decode(fileContent);
-              // Limit file content to ~10KB to avoid overwhelming context
-              const truncated = textContent.length > 10240
-                ? textContent.slice(0, 10240) + '\n... (truncated, file too large)'
-                : textContent;
-              contextString += `\nAttached File: ${att.path}\n\`\`\`\n${truncated}\n\`\`\`\n`;
+          // If content is already pre-loaded (e.g. from local upload), use it directly
+          if (att.content) {
+            const truncated = att.content.length > 10240
+              ? att.content.slice(0, 10240) + '\n... (truncated, file too large)'
+              : att.content;
+            contextString += `\nAttached File: ${att.name}\n\`\`\`\n${truncated}\n\`\`\`\n`;
+          } else {
+            try {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+              if (workspaceFolder) {
+                const fileUri = vscode.Uri.joinPath(workspaceFolder, att.path);
+                const fileContent = await vscode.workspace.fs.readFile(fileUri);
+                const textContent = new TextDecoder().decode(fileContent);
+                // Limit file content to ~10KB to avoid overwhelming context
+                const truncated = textContent.length > 10240
+                  ? textContent.slice(0, 10240) + '\n... (truncated, file too large)'
+                  : textContent;
+                contextString += `\nAttached File: ${att.path}\n\`\`\`\n${truncated}\n\`\`\`\n`;
+              }
+            } catch (e) {
+              contextString += `\nAttached File: ${att.path} (could not read file)\n`;
             }
-          } catch (e) {
-            contextString += `\nAttached File: ${att.path} (could not read file)\n`;
           }
         } else if (att.type === 'folder') {
           try {
@@ -942,10 +1181,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           const content = (att as any).content || '(no content fetched)';
           contextString += `\nURL Content [${att.path}]:\n\`\`\`\n${content}\n\`\`\`\n`;
         }
+        // image attachments are handled separately below
+      }
+    }
+
+    // Collect image attachments for multimodal
+    const imageAttachments: Array<{ base64Data: string; mimeType: string }> = [];
+    if (attachments && attachments.length > 0) {
+      for (const att of attachments) {
+        if (att.type === 'image' && att.base64Data && att.mimeType) {
+          imageAttachments.push({ base64Data: att.base64Data, mimeType: att.mimeType });
+        }
       }
     }
 
     let fullContent = '';
+    let hadError = false;
     try {
       await this._hermesClient.streamChat(text, contextString, (chunk: string) => {
         fullContent += chunk;
@@ -955,17 +1206,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           content: fullContent,
           status: 'streaming',
         });
-      });
+      }, imageAttachments.length > 0 ? imageAttachments : undefined);
     } catch (e: any) {
       console.error(e);
-      fullContent += `\n\nError: ${e.message}`;
+      fullContent += `\n\n[Error: ${e.message}]`;
+      hadError = true;
     }
 
     this.postMessage({
       type: 'updateMessage',
       id: responseId,
       content: fullContent,
-      status: 'done'
+      status: hadError ? 'error' : 'done'
     });
 
     // Track assistant message and auto-save

@@ -5,6 +5,8 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   status?: 'sending' | 'streaming' | 'done' | 'error';
+  /** Attachments shown in user message bubble */
+  attachments?: ContextAttachment[];
 }
 
 /** VS Code API interface for type safety */
@@ -32,11 +34,15 @@ export interface ModelInfo {
 
 /** Context attachment from @ mentions */
 export interface ContextAttachment {
-  type: 'file' | 'folder' | 'terminal' | 'rules' | 'url';
+  type: 'file' | 'folder' | 'terminal' | 'rules' | 'url' | 'image';
   name: string;
   path: string;
   /** Pre-loaded content (used for terminal output) */
   content?: string;
+  /** Base64-encoded data (used for image attachments) */
+  base64Data?: string;
+  /** MIME type (used for image attachments) */
+  mimeType?: string;
 }
 
 /** Message types sent from webview to extension */
@@ -56,7 +62,13 @@ export type OutgoingMessage =
   | { type: 'pickFolder' }
   | { type: 'pickTerminal' }
   | { type: 'pickRules' }
-  | { type: 'pickUrl' };
+  | { type: 'pickUrl' }
+  | { type: 'pickAttachment' }
+  | { type: 'pickImage' }
+  | { type: 'localFileAttached'; file: { name: string; fileType: 'file' | 'image'; content?: string; base64Data?: string; mimeType?: string; size: number } }
+  | { type: 'retryMessage'; value: string; attachments?: ContextAttachment[] }
+  | { type: 'unsendMessage'; messageId: string }
+  | { type: 'showWarning'; value: string };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
@@ -79,4 +91,7 @@ export type IncomingMessage =
   | { type: 'modelsLoaded'; models: ModelInfo[]; activeModel: string }
   | { type: 'modelChanged'; model: string }
   | { type: 'attachmentAdded'; attachment: ContextAttachment }
-  | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] };
+  | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] }
+  | { type: 'clearLastError' }
+  | { type: 'populateInput'; text: string; attachments?: ContextAttachment[] }
+  | { type: 'removeMessages'; fromIndex: number };
