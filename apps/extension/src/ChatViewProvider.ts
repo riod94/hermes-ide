@@ -1032,13 +1032,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     await this._handleChatMessage(responseText);
   }
 
-  /** Add selected text from editor/terminal to chat input (Ctrl+L / Cmd+L) */
+  /** Add selected text from editor/terminal to chat input (Ctrl+Shift+L / Cmd+Shift+L) */
   private async _handleAddToChat() {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       // Try terminal selection
       await vscode.commands.executeCommand('workbench.action.terminal.copySelection');
-      // Terminal selection goes to clipboard — read from there
       const clipboard = await vscode.env.clipboard.readText();
       if (clipboard && clipboard.trim()) {
         this._insertSelectionToChat(clipboard.trim(), 'terminal');
@@ -1061,7 +1060,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (lineText) {
         const relPath = vscode.workspace.asRelativePath(doc.uri);
         const lineNum = line.lineNumber + 1;
-        this._insertSelectionToChat(lineText, 'editor', relPath, lineNum);
+        const col = editor.selection.active.character + 1;
+        this._insertSelectionToChat(lineText, 'editor', relPath, lineNum, lineNum, col, col + lineText.length);
       }
       return;
     }
@@ -1069,42 +1069,57 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const combined = selectedTexts.join('\n');
     const relPath = vscode.workspace.asRelativePath(doc.uri);
     const startLine = selections[0].start.line + 1;
+    const startCol = selections[0].start.character + 1;
     const endLine = selections[selections.length - 1].end.line + 1;
+    const endCol = selections[selections.length - 1].end.character + 1;
 
-    this._insertSelectionToChat(combined, 'editor', relPath, startLine, endLine);
+    this._insertSelectionToChat(combined, 'editor', relPath, startLine, endLine, startCol, endCol);
   }
 
-  /** Format selection and send to webview chat input */
+  /** Send selection as an attachment chip to webview */
   private _insertSelectionToChat(
     text: string,
     source: 'editor' | 'terminal',
     filePath?: string,
     startLine?: number,
-    endLine?: number
+    endLine?: number,
+    startCol?: number,
+    endCol?: number
   ) {
-    // Format as code block with metadata
-    let formatted: string;
+    // Build label and line range
+    let chipName: string;
+    let lineRange: string;
 
     if (source === 'terminal') {
-      formatted = `\`\`\`terminal\n${text}\n\`\`\``;
-    } else if (filePath) {
-      const lineInfo = startLine && endLine && startLine !== endLine
-        ? `:${startLine}-${endLine}`
-        : startLine
-          ? `:${startLine}`
-          : '';
-      formatted = `\`\`\`${filePath}${lineInfo}\n${text}\n\`\`\``;
+      chipName = 'Terminal Selection';
+      lineRange = '';
     } else {
-      formatted = `\`\`\`\n${text}\n\`\`\``;
+      const fileName = filePath ? filePath.split('/').pop() || filePath : 'untitled';
+      if (startLine && endLine && startLine !== endLine) {
+        lineRange = `L${startLine}:C${startCol || 1}-L${endLine}:C${endCol || 1}`;
+        chipName = `${fileName} ${lineRange}`;
+      } else if (startLine) {
+        lineRange = `L${startLine}`;
+        chipName = `${fileName} ${lineRange}`;
+      } else {
+        lineRange = '';
+        chipName = fileName;
+      }
     }
 
     // Ensure Hermes sidebar is visible
     vscode.commands.executeCommand('hermes.chatView.focus');
 
-    // Send to webview — append to current input (don't replace)
+    // Send as attachment chip (not raw text)
     this.postMessage({
-      type: 'appendToInput',
-      text: formatted,
+      type: 'attachmentAdded',
+      attachment: {
+        type: 'selection',
+        name: chipName,
+        path: filePath || 'terminal',
+        content: text,
+        lineRange: lineRange,
+      },
     });
   }
 
@@ -1279,6 +1294,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           // URL content is pre-loaded in the attachment
           const content = (att as any).content || '(no content fetched)';
           contextString += `\nURL Content [${att.path}]:\n\`\`\`\n${content}\n\`\`\`\n`;
+        } else if (att.type === 'selection') {
+          // Code selection from editor or terminal (Ctrl+Shift+L)
+          const content = (att as any).content || '';
+          const lineRange = (att as any).lineRange || '';
+          const label = lineRange ? `${att.path} ${lineRange}` : att.path;
+          contextString += `\nSelected Code [${label}]:\n\`\`\`\n${content}\n\`\`\`\n`;
         }
         // image attachments are handled separately below
       }

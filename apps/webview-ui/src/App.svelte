@@ -135,19 +135,6 @@
           }
           break;
         }
-        case 'appendToInput': {
-          // Append text to current chat input (Ctrl+L / Cmd+L "Add to Chat")
-          const appendMsg = msg as any;
-          editText.update((current: string) => {
-            if (!current || current.trim() === '') {
-              return appendMsg.text + '\n';
-            }
-            // Add newline separator if current text doesn't end with one
-            const sep = current.endsWith('\n') ? '' : '\n';
-            return current + sep + appendMsg.text + '\n';
-          });
-          break;
-        }
         case 'removeMessages': {
           // Remove messages from a certain index onwards (for unsend rollback)
           const rmMsg = msg as any;

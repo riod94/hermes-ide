@@ -34,7 +34,7 @@ export interface ModelInfo {
 
 /** Context attachment from @ mentions */
 export interface ContextAttachment {
-  type: 'file' | 'folder' | 'terminal' | 'rules' | 'url' | 'image';
+  type: 'file' | 'folder' | 'terminal' | 'rules' | 'url' | 'image' | 'selection';
   name: string;
   path: string;
   /** Pre-loaded content (used for terminal output) */
@@ -43,6 +43,8 @@ export interface ContextAttachment {
   base64Data?: string;
   /** MIME type (used for image attachments) */
   mimeType?: string;
+  /** Line range info for selection attachments (e.g., "L2:C7-L5:C100") */
+  lineRange?: string;
 }
 
 /** Message types sent from webview to extension */
@@ -96,5 +98,4 @@ export type IncomingMessage =
   | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] }
   | { type: 'clearLastError' }
   | { type: 'populateInput'; text: string; attachments?: ContextAttachment[] }
-  | { type: 'appendToInput'; text: string }
   | { type: 'removeMessages'; fromIndex: number };
