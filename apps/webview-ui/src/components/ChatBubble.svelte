@@ -274,15 +274,27 @@
                     color: var(--color-fg);
                     border-bottom-left-radius: 4px;">
           {#if contentSegments.length === 0}
-            <!-- Empty or still loading -->
+            <!-- Empty or still loading — show typing indicator -->
             <div class="px-3 py-2">
-              <MarkdownRenderer content={message.content} {isStreaming} />
+              {#if isStreaming && !message.content}
+                <div class="typing-indicator">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </div>
+              {:else}
+                <MarkdownRenderer content={message.content} {isStreaming} />
+                {#if isStreaming}<span class="streaming-cursor">▌</span>{/if}
+              {/if}
             </div>
           {:else}
             {#each contentSegments as segment}
               {#if segment.type === 'markdown' && segment.content}
                 <div class="px-3 py-2">
                   <MarkdownRenderer content={segment.content} {isStreaming} />
+                  {#if isStreaming && segment === contentSegments[contentSegments.length - 1]}
+                    <span class="streaming-cursor">▌</span>
+                  {/if}
                 </div>
               {:else if segment.type === 'checkpoint' && segment.checkpoint}
                 <div class="px-1 py-1">
@@ -425,5 +437,53 @@
     background: #f38ba8;
     color: var(--color-bg);
     border-color: #f38ba8;
+  }
+
+  /* ── Typing indicator (bouncing dots) ── */
+  .typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+  }
+
+  .typing-indicator .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-muted);
+    animation: typing-bounce 1.4s ease-in-out infinite;
+  }
+
+  .typing-indicator .dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-indicator .dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes typing-bounce {
+    0%, 60%, 100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-6px);
+      opacity: 1;
+    }
+  }
+
+  /* ── Streaming cursor ── */
+  .streaming-cursor {
+    display: inline;
+    color: var(--color-accent);
+    font-weight: bold;
+    animation: cursor-blink 0.8s steps(2) infinite;
+  }
+
+  @keyframes cursor-blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
   }
 </style>
