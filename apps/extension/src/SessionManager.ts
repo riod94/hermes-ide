@@ -116,7 +116,10 @@ export class SessionManager {
     const existing = this.loadSession(id);
     if (!existing) return;
 
-    const now = Date.now();
+    // Use last message timestamp as updatedAt (reflects actual chat activity)
+    const lastMsgTimestamp = messages.length > 0
+      ? messages[messages.length - 1].timestamp
+      : existing.updatedAt;
 
     // Auto-generate title from first user message if still default
     let sessionTitle = title || existing.title;
@@ -140,7 +143,7 @@ export class SessionManager {
       title: sessionTitle,
       conversationId,
       messages,
-      updatedAt: now,
+      updatedAt: lastMsgTimestamp,
     };
     await this.context.globalState.update(`${SESSION_DATA_PREFIX}${id}`, updated);
 
@@ -154,7 +157,7 @@ export class SessionManager {
         messageCount: messages.length,
         preview,
         createdAt: existing.createdAt,
-        updatedAt: now,
+        updatedAt: lastMsgTimestamp,
       };
     }
     await this.context.globalState.update(SESSIONS_KEY, metas);
