@@ -96,7 +96,11 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="unsend-actions">
           <span class="unsend-btn" onclick={handleUnsend} title="Unsend & edit this message">
-            ◀️ Unsend
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 14 4 9 9 4"></polyline>
+              <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+            </svg>
+            Unsend
           </span>
         </div>
       {/if}
@@ -114,7 +118,11 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <span class="retry-btn" onclick={handleRetry} title="Retry message">
-          🔄 Retry
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+          </svg>
+          Retry
         </span>
       {/if}
     </div>
@@ -157,6 +165,9 @@
 
   /* ── Retry button ── */
   .retry-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     font-size: 10px;
     color: var(--color-accent);
     cursor: pointer;
@@ -184,6 +195,9 @@
   }
 
   .unsend-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     font-size: 10px;
     color: var(--color-muted);
     cursor: pointer;
