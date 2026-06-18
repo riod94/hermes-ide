@@ -13,6 +13,8 @@
   let inputText = $state('');
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let mentionPopupComponent: MentionPopup | undefined = $state();
+  let showAttachMenu = $state(false);
+  let fileInputEl: HTMLInputElement | undefined = $state();
 
   function send() {
     const trimmed = inputText.trim();
@@ -116,6 +118,105 @@
       // Small delay to avoid racing with the pick action
     }
   });
+
+  /** Close attach menu when clicking outside */
+  $effect(() => {
+    if (!showAttachMenu) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.attach-menu-container')) {
+        showAttachMenu = false;
+      }
+    }
+    // Delay to avoid immediate close from the same click
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 10);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  });
+
+  function toggleAttachMenu() {
+    showAttachMenu = !showAttachMenu;
+  }
+
+  function triggerFileUpload() {
+    showAttachMenu = false;
+    if (fileInputEl) {
+      fileInputEl.value = ''; // Reset so same file can be re-selected
+      fileInputEl.click();
+    }
+  }
+
+  function openProjectPicker() {
+    showAttachMenu = false;
+    vscode.postMessage({ type: 'pickAttachment' });
+  }
+
+  /** Image MIME types for detection */
+  const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
+  const IMAGE_MIME_PREFIXES = ['image/'];
+  const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+  const MAX_TEXT_SIZE = 10 * 1024; // 10KB
+
+  function handleLocalFileSelected(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isImage = IMAGE_EXTENSIONS.has(ext) || IMAGE_MIME_PREFIXES.some(p => file.type.startsWith(p));
+
+    if (isImage) {
+      // Image: check size, read as base64
+      if (file.size > MAX_IMAGE_SIZE) {
+        vscode.postMessage({ type: 'chatMessage', value: `⚠️ Image too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 2MB.` });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        // dataUrl format: "data:image/png;base64,xxxxx"
+        const commaIdx = dataUrl.indexOf(',');
+        const base64Data = dataUrl.slice(commaIdx + 1);
+        const mimeType = file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+
+        vscode.postMessage({
+          type: 'localFileAttached',
+          file: {
+            name: file.name,
+            fileType: 'image',
+            base64Data,
+            mimeType,
+            size: file.size,
+          },
+        });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      // Text file: check size, read as text
+      if (file.size > MAX_TEXT_SIZE) {
+        vscode.postMessage({ type: 'chatMessage', value: `⚠️ File too large (${(file.size / 1024).toFixed(0)}KB). Max 10KB for text files.` });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = reader.result as string;
+        vscode.postMessage({
+          type: 'localFileAttached',
+          file: {
+            name: file.name,
+            fileType: 'file',
+            content,
+            size: file.size,
+          },
+        });
+      };
+      reader.readAsText(file);
+    }
+  }
 </script>
 
 <div class="input-container border-t" style="border-color: var(--color-border); background: var(--color-sidebar);">
@@ -176,18 +277,52 @@
   <!-- Toolbar row: [+] attachment ... [model selector] -->
   <div class="toolbar-row flex items-center justify-between px-3 pb-2 pt-1">
     <div class="flex items-center gap-1">
-      <!-- Attachment button [+] -->
-      <button
-        class="toolbar-btn"
-        title="Attach file or image"
-        onclick={() => vscode.postMessage({ type: 'pickAttachment' })}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </button>
+      <!-- Attachment button [+] with dropdown menu -->
+      <div class="attach-menu-container" style="position: relative;">
+        <button
+          class="toolbar-btn"
+          title="Attach file or image"
+          onclick={toggleAttachMenu}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+
+        {#if showAttachMenu}
+          <div class="attach-dropdown">
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="attach-dropdown-item" onclick={triggerFileUpload}>
+              <span class="attach-dropdown-icon">📤</span>
+              <div class="attach-dropdown-text">
+                <span class="attach-dropdown-label">Upload File</span>
+                <span class="attach-dropdown-desc">From your computer</span>
+              </div>
+            </div>
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="attach-dropdown-item" onclick={openProjectPicker}>
+              <span class="attach-dropdown-icon">📂</span>
+              <div class="attach-dropdown-text">
+                <span class="attach-dropdown-label">From Project</span>
+                <span class="attach-dropdown-desc">Browse workspace files</span>
+              </div>
+            </div>
+          </div>
+        {/if}
+      </div>
     </div>
+
+    <!-- Hidden file input for local upload -->
+    <input
+      bind:this={fileInputEl}
+      type="file"
+      accept="image/*,.txt,.md,.json,.csv,.log,.yaml,.yml,.xml,.js,.ts,.py,.php,.html,.css,.scss,.sh,.bash,.sql,.env,.cfg,.ini,.toml"
+      onchange={handleLocalFileSelected}
+      style="display: none;"
+    />
 
     <div class="flex items-center gap-1">
       <!-- Model selector badge -->
@@ -327,5 +462,60 @@
   .chip-remove:hover {
     background: var(--color-border);
     color: var(--color-fg);
+  }
+
+  /* ── Attach dropdown menu ── */
+  .attach-dropdown {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    min-width: 200px;
+    background: var(--color-sidebar);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    overflow: hidden;
+  }
+
+  .attach-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+
+  .attach-dropdown-item:hover {
+    background: var(--color-input-bg);
+  }
+
+  .attach-dropdown-item + .attach-dropdown-item {
+    border-top: 1px solid var(--color-border);
+  }
+
+  .attach-dropdown-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+  }
+
+  .attach-dropdown-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .attach-dropdown-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-fg);
+  }
+
+  .attach-dropdown-desc {
+    font-size: 10px;
+    color: var(--color-muted);
   }
 </style>

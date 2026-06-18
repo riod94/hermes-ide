@@ -62,7 +62,8 @@ export type OutgoingMessage =
   | { type: 'pickRules' }
   | { type: 'pickUrl' }
   | { type: 'pickAttachment' }
-  | { type: 'pickImage' };
+  | { type: 'pickImage' }
+  | { type: 'localFileAttached'; file: { name: string; fileType: 'file' | 'image'; content?: string; base64Data?: string; mimeType?: string; size: number } };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {

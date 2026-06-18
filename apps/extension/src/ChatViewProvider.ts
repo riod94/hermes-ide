@@ -134,6 +134,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'pickImage':
           this._handlePickImage();
           break;
+        case 'localFileAttached':
+          this._handleLocalFileAttached(data.file);
+          break;
       }
     });
 
@@ -927,6 +930,45 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     } catch (e) {
       console.error('[Hermes] Failed to read image', e);
       vscode.window.showWarningMessage('Failed to read image file');
+    }
+  }
+
+  /** Handle local file uploaded from browser file picker */
+  private _handleLocalFileAttached(file: {
+    name: string;
+    fileType: 'file' | 'image';
+    content?: string;
+    base64Data?: string;
+    mimeType?: string;
+    size: number;
+  }) {
+    const sizeLabel = file.size > 1024
+      ? `${(file.size / 1024).toFixed(0)}KB`
+      : `${file.size}B`;
+
+    if (file.fileType === 'image') {
+      this.postMessage({
+        type: 'attachmentAdded',
+        attachment: {
+          type: 'image',
+          name: file.name,
+          path: `(uploaded) ${file.name}`,
+          base64Data: file.base64Data,
+          mimeType: file.mimeType,
+        },
+      });
+      vscode.window.showInformationMessage(`Attached image: ${file.name} (${sizeLabel})`);
+    } else {
+      this.postMessage({
+        type: 'attachmentAdded',
+        attachment: {
+          type: 'file',
+          name: file.name,
+          path: `(uploaded) ${file.name}`,
+          content: file.content,
+        },
+      });
+      vscode.window.showInformationMessage(`Attached file: ${file.name} (${sizeLabel})`);
     }
   }
 
