@@ -1,6 +1,6 @@
 <script lang="ts">
   import { vscode } from '../lib/vscode';
-  import { activeModel, showModelSelector, attachments, showMentionPopup, showSlashPopup, editText } from '../lib/store';
+  import { activeModel, showModelSelector, attachments, showMentionPopup, showSlashPopup, editText, isLoading } from '../lib/store';
   import type { ContextAttachment } from '../lib/types';
   import MentionPopup from './MentionPopup.svelte';
   import SlashCommandPopup from './SlashCommandPopup.svelte';
@@ -178,6 +178,10 @@
     window.addEventListener('message', handleSelectionAttachment);
     return () => window.removeEventListener('message', handleSelectionAttachment);
   });
+
+  function stopGeneration() {
+    vscode.postMessage({ type: 'stopGeneration' });
+  }
 
   function send() {
     if (isEditorEmpty() || disabled) return;
@@ -687,18 +691,33 @@
                word-break: break-word;"
       ></div>
 
-      <button
-        onclick={send}
-        disabled={disabled}
-        class="flex-shrink-0 rounded-lg p-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        style="background: var(--color-btn-bg); color: var(--color-btn-fg);"
-        title="Send (Enter)"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="19" x2="12" y2="5"></line>
-          <polyline points="5 12 12 5 19 12"></polyline>
-        </svg>
-      </button>
+      {#if $isLoading}
+        <!-- Stop button during generation -->
+        <button
+          onclick={stopGeneration}
+          class="flex-shrink-0 rounded-lg p-2 transition-colors"
+          style="background: #f38ba8; color: var(--color-bg);"
+          title="Stop generation"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+          </svg>
+        </button>
+      {:else}
+        <!-- Send button -->
+        <button
+          onclick={send}
+          disabled={disabled}
+          class="flex-shrink-0 rounded-lg p-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          style="background: var(--color-btn-bg); color: var(--color-btn-fg);"
+          title="Send (Enter)"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5"></line>
+            <polyline points="5 12 12 5 19 12"></polyline>
+          </svg>
+        </button>
+      {/if}
     </div>
   </div>
 
