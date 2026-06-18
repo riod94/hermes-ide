@@ -134,7 +134,35 @@ export async function buildExtensionVsix(): Promise<{ success: boolean; vsixPath
   const extensionDir = join(import.meta.dir, "../../../..", "apps/extension");
   const rootDir = join(import.meta.dir, "../../../..");
 
+  let hasStash = false;
+
   try {
+    // Step 0: Ensure we build from master branch with latest code
+    // Stash any uncommitted changes to avoid checkout conflicts
+    const gitStash = Bun.spawn(["git", "stash", "--include-untracked"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" });
+    await gitStash.exited;
+    const stashOut = await new Response(gitStash.stdout).text();
+    hasStash = !stashOut.includes("No local changes");
+
+    const gitFetch = Bun.spawn(["git", "fetch", "origin", "master"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" });
+    await gitFetch.exited;
+
+    const gitCheckout = Bun.spawn(["git", "checkout", "master"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" });
+    const checkoutCode = await gitCheckout.exited;
+    const checkoutErr = await new Response(gitCheckout.stderr).text();
+    if (checkoutCode !== 0) {
+      if (hasStash) { const pop = Bun.spawn(["git", "stash", "pop"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" }); await pop.exited; }
+      return { success: false, vsixPath: "", output: `Git checkout master failed: ${checkoutErr}` };
+    }
+
+    const gitPull = Bun.spawn(["git", "pull", "origin", "master"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" });
+    const pullCode = await gitPull.exited;
+    const pullErr = await new Response(gitPull.stderr).text();
+    if (pullCode !== 0) {
+      if (hasStash) { const pop = Bun.spawn(["git", "stash", "pop"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" }); await pop.exited; }
+      return { success: false, vsixPath: "", output: `Git pull master failed: ${pullErr}` };
+    }
+
     // Step 1: Full build (webview + copy + extension)
     const build = Bun.spawn(["bun", "run", "build"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" });
     const buildCode = await build.exited;
@@ -157,8 +185,19 @@ export async function buildExtensionVsix(): Promise<{ success: boolean; vsixPath
     const pkg = JSON.parse(await Bun.file(join(extensionDir, "package.json")).text());
     const vsixPath = join(extensionDir, `hermes-ide-${pkg.version}.vsix`);
 
+    // Restore stashed changes if any
+    if (hasStash) {
+      const pop = Bun.spawn(["git", "stash", "pop"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" });
+      await pop.exited;
+    }
+
     return { success: true, vsixPath, output: vsceOut };
   } catch (e: any) {
+    // Restore stashed changes even on failure
+    if (hasStash) {
+      const pop = Bun.spawn(["git", "stash", "pop"], { cwd: rootDir, stdout: "pipe", stderr: "pipe" });
+      await pop.exited;
+    }
     return { success: false, vsixPath: "", output: e.message };
   }
 }
