@@ -107,8 +107,9 @@ export class HermesClient {
     try {
       const textMessage = contextString ? `${contextString}\n\nUser: ${message}` : message;
 
-      // Build input: multimodal content array if images present, plain string otherwise
-      let input: string | Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }>;
+      // Build input: for multimodal, wrap content parts in a message object with role
+      // Hermes Responses API expects: [{role: "user", content: [...parts...]}]
+      let input: string | Array<{ role: string; content: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> }>;
       let usingMultimodal = false;
 
       if (images && images.length > 0) {
@@ -128,7 +129,8 @@ export class HermesClient {
           });
         }
 
-        input = contentParts;
+        // Wrap in message object — API expects [{role, content}] not bare parts array
+        input = [{ role: 'user', content: contentParts }];
         usingMultimodal = true;
       } else {
         input = textMessage;
