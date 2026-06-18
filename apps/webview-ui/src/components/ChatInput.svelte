@@ -433,23 +433,143 @@
     }
   }
 
-  /** Prevent pasting rich content — strip to plain text */
+  /** Handle paste — image from clipboard or strip rich text to plain */
   function handlePaste(e: ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          e.preventDefault();
+          const file = items[i].getAsFile();
+          if (file) {
+            // Check limits
+            if (file.size > MAX_FILE_SIZE) {
+              showWarning(`Pasted image too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 2MB.`);
+              return;
+            }
+            let currentCount = 0;
+            attachments.subscribe((v: ContextAttachment[]) => currentCount = v.length)();
+            if (currentCount >= MAX_FILES) {
+              showWarning(`Max ${MAX_FILES} attachments. Remove one first.`);
+              return;
+            }
+            processFile(file);
+          }
+          return;
+        }
+      }
+    }
+    // No image — strip to plain text
     e.preventDefault();
     const text = e.clipboardData?.getData('text/plain') || '';
     if (text) {
       document.execCommand('insertText', false, text);
     }
   }
+
+  // ─── Drag & Drop ───
+
+  let isDragOver = $state(false);
+
+  function handleDragEnter(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer?.types.includes('Files')) {
+      isDragOver = true;
+    }
+  }
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only leave if exiting the container (not entering a child)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom) {
+      isDragOver = false;
+    }
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragOver = false;
+
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+
+    // Check limits
+    if (files.length > MAX_FILES) {
+      showWarning(`Max ${MAX_FILES} files at a time. You dropped ${files.length}.`);
+      return;
+    }
+
+    let currentCount = 0;
+    attachments.subscribe((v: ContextAttachment[]) => currentCount = v.length)();
+    if (currentCount + files.length > MAX_FILES) {
+      showWarning(`Max ${MAX_FILES} attachments total. Already have ${currentCount}, tried to add ${files.length}.`);
+      return;
+    }
+
+    const oversized: string[] = [];
+    const validFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > MAX_FILE_SIZE) {
+        oversized.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (oversized.length > 0) {
+      showWarning(`Files exceed 2MB limit:\n${oversized.join('\n')}`);
+    }
+
+    for (const file of validFiles) {
+      processFile(file);
+    }
+  }
 </script>
 
-<div class="input-container border-t" style="border-color: var(--color-border); background: var(--color-sidebar);">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="input-container border-t" class:drag-over={isDragOver}
+  role="region"
+  aria-label="Chat input area"
+  style="border-color: var(--color-border); background: var(--color-sidebar);"
+  ondragenter={handleDragEnter}
+  ondragover={handleDragOver}
+  ondragleave={handleDragLeave}
+  ondrop={handleDrop}
+>
+  <!-- Drop zone overlay -->
+  {#if isDragOver}
+    <div class="drop-overlay">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      <span>Drop files here</span>
+    </div>
+  {/if}
   <!-- Attachment chips bar (file/folder/image/url/terminal — NOT selection) -->
   {#if $attachments.filter(a => a.type !== 'selection').length > 0}
     <div class="attachment-chips px-3 pt-2">
       {#each $attachments.filter(a => a.type !== 'selection') as attachment, i}
         <div class="attachment-chip">
-          <span class="chip-icon">{attachment.type === 'file' ? '📄' : attachment.type === 'folder' ? '📁' : attachment.type === 'terminal' ? '⬛' : attachment.type === 'url' ? '🔗' : attachment.type === 'image' ? '🖼️' : '📏'}</span>
+          {#if attachment.type === 'image' && attachment.base64Data}
+            <img class="chip-thumbnail" src="data:{attachment.mimeType || 'image/png'};base64,{attachment.base64Data}" alt={attachment.name} />
+          {:else}
+            <span class="chip-icon">{attachment.type === 'file' ? '📄' : attachment.type === 'folder' ? '📁' : attachment.type === 'terminal' ? '⬛' : attachment.type === 'url' ? '🔗' : attachment.type === 'image' ? '🖼️' : '📏'}</span>
+          {/if}
           <span class="chip-name" title={attachment.path}>{attachment.name}</span>
           <button class="chip-remove" onclick={() => removeAttachment(i)} title="Remove">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -575,6 +695,39 @@
 
 <style>
   .input-container {
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* ── Drag & Drop overlay ── */
+  .input-container.drag-over {
+    border-color: var(--color-btn-bg) !important;
+  }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: color-mix(in srgb, var(--color-sidebar) 90%, var(--color-btn-bg));
+    border: 2px dashed var(--color-btn-bg);
+    border-radius: 8px;
+    color: var(--color-btn-bg);
+    font-size: 12px;
+    font-weight: 500;
+    pointer-events: none;
+  }
+
+  /* ── Image thumbnail in chip ── */
+  .chip-thumbnail {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    object-fit: cover;
     flex-shrink: 0;
   }
 
