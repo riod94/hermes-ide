@@ -210,6 +210,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // Fetch and send models
     this._handleGetModels();
+
+    // Fetch and send skills
+    this._handleGetSkills();
   }
 
   /** Create new session (save current first) */
@@ -347,6 +350,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       type: 'modelsLoaded',
       models: modelList,
       activeModel: currentModel,
+    });
+  }
+
+  /** Fetch and send skills list to webview */
+  private async _handleGetSkills() {
+    const skillList = await this._hermesClient.fetchSkills();
+    this.postMessage({
+      type: 'skillsLoaded',
+      skills: skillList,
     });
   }
 

@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import type { ChatMessage, SessionMeta, ModelInfo, ContextAttachment } from './types';
+import type { ChatMessage, SessionMeta, ModelInfo, ContextAttachment, SkillInfo } from './types';
 
 /** All chat messages */
 export const messages = writable<ChatMessage[]>([]);
@@ -45,6 +45,12 @@ export const attachments = writable<ContextAttachment[]>([]);
 
 /** Whether mention popup is visible */
 export const showMentionPopup = writable(false);
+
+/** Whether slash command popup is visible */
+export const showSlashPopup = writable(false);
+
+/** Available skills from Hermes API */
+export const skills = writable<SkillInfo[]>([]);
 
 /** Pre-filled text for input (from unsend/edit) */
 export const editText = writable<string>('');
