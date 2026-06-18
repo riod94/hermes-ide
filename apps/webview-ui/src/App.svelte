@@ -99,6 +99,8 @@
         // Attachment messages (from @file / @folder picks)
         case 'attachmentAdded': {
           const attMsg = msg as any;
+          // Selection attachments are handled inline in ChatInput (rich text chip)
+          if (attMsg.attachment?.type === 'selection') break;
           attachments.update((items: any[]) => [...items, attMsg.attachment]);
           break;
         }
