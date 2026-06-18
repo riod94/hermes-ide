@@ -3,6 +3,12 @@ export interface ModelInfo {
   owned_by: string;
 }
 
+export interface SkillInfo {
+  name: string;
+  description: string;
+  category: string | null;
+}
+
 export class HermesClient {
   private apiUrl: string;
   private apiKey: string;
@@ -54,6 +60,27 @@ export class HermesClient {
       return data.data || [];
     } catch (error) {
       console.error("[Hermes] Error fetching models:", error);
+      return [];
+    }
+  }
+
+  /** Fetch available skills from Hermes API */
+  public async fetchSkills(): Promise<SkillInfo[]> {
+    try {
+      const response = await fetch(`${this.apiUrl}/skills`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+        },
+      });
+      if (!response.ok) {
+        console.warn(`[Hermes] Failed to fetch skills: ${response.statusText}`);
+        return [];
+      }
+      const data = await response.json() as { data?: SkillInfo[] };
+      return data.data || [];
+    } catch (error) {
+      console.error("[Hermes] Error fetching skills:", error);
       return [];
     }
   }

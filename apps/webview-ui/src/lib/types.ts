@@ -82,6 +82,13 @@ export interface PendingDiff {
   new_content: string;
 }
 
+/** Skill info from Hermes API */
+export interface SkillInfo {
+  name: string;
+  description: string;
+  category: string | null;
+}
+
 /** Message types sent from extension to webview */
 export type IncomingMessage =
   | { type: 'addMessage'; message: ChatMessage }
@@ -94,6 +101,7 @@ export type IncomingMessage =
   | { type: 'activeSession'; session: { id: string; title: string } }
   | { type: 'modelsLoaded'; models: ModelInfo[]; activeModel: string }
   | { type: 'modelChanged'; model: string }
+  | { type: 'skillsLoaded'; skills: SkillInfo[] }
   | { type: 'attachmentAdded'; attachment: ContextAttachment }
   | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] }
   | { type: 'clearLastError' }

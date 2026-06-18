@@ -10,7 +10,7 @@
     messages, isLoading, updateMessage, clearMessages,
     sessions, activeSessionId, activeSessionTitle, showSessionList,
     models, activeModel, showModelSelector,
-    attachments, editText,
+    attachments, editText, skills,
   } from './lib/store';
   import { vscode } from './lib/vscode';
   import type { IncomingMessage } from './lib/types';
@@ -94,6 +94,11 @@
         case 'modelChanged': {
           const chgMsg = msg as any;
           activeModel.set(chgMsg.model);
+          break;
+        }
+        case 'skillsLoaded': {
+          const skillMsg = msg as any;
+          skills.set(skillMsg.skills || []);
           break;
         }
         // Attachment messages (from @file / @folder picks)

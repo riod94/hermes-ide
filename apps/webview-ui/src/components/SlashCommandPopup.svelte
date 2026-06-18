@@ -1,27 +1,105 @@
 <script lang="ts">
-  import { showSlashPopup } from '../lib/store';
+  import { showSlashPopup, skills } from '../lib/store';
+  import type { SkillInfo } from '../lib/types';
 
-  interface SlashCommand {
+  interface SlashItem {
     id: string;
     label: string;
     icon: string;
     description: string;
+    type: 'command' | 'skill';
+    category?: string;
   }
 
-  const commands: SlashCommand[] = [
-    { id: 'skills', label: '/skills', icon: '🧠', description: 'List all available skills' },
-    { id: 'new-skill', label: '/new-skill', icon: '✨', description: 'Save this conversation as a new skill' },
-    { id: 'expert', label: '/expert', icon: '🎯', description: 'Activate expert mode for complex tasks' },
+  // Built-in commands (always shown first)
+  const builtinCommands: SlashItem[] = [
+    { id: 'cmd:new-skill', label: '/new-skill', icon: '✨', description: 'Save conversation as a new skill', type: 'command' },
+    { id: 'cmd:expert', label: '/expert', icon: '🎯', description: 'Activate expert mode for complex tasks', type: 'command' },
   ];
+
+  // Category icons
+  const categoryIcons: Record<string, string> = {
+    'autonomous-ai-agents': '🤖',
+    'creative': '🎨',
+    'data-science': '📊',
+    'devops': '⚙️',
+    'email': '📧',
+    'gaming': '🎮',
+    'github': '🐙',
+    'mcp': '🔌',
+    'media': '🎵',
+    'mlops': '🧪',
+    'note-taking': '📝',
+    'productivity': '📋',
+    'research': '🔬',
+    'smart-home': '🏠',
+    'social-media': '📱',
+    'software-development': '💻',
+    'red-teaming': '🔴',
+    'nusawork': '🏢',
+    'nusawork-legacy': '🏚️',
+  };
 
   let selectedIndex = $state(0);
   let filterText = $state('');
 
-  let filteredCommands = $derived(
-    filterText
-      ? commands.filter(c => c.label.toLowerCase().includes(filterText.toLowerCase()))
-      : commands
-  );
+  // Build combined list: commands + skills from API
+  let allItems = $derived.by(() => {
+    const skillItems: SlashItem[] = $skills.map((s: SkillInfo) => ({
+      id: `skill:${s.name}`,
+      label: `/${s.name}`,
+      icon: categoryIcons[s.category || ''] || '🧠',
+      description: s.description,
+      type: 'skill' as const,
+      category: s.category || undefined,
+    }));
+    return [...builtinCommands, ...skillItems];
+  });
+
+  let filteredItems = $derived.by(() => {
+    if (!filterText) return allItems;
+    const q = filterText.toLowerCase().replace(/^\//, '');
+    return allItems.filter(item => {
+      const name = item.label.toLowerCase().replace(/^\//, '');
+      const desc = item.description.toLowerCase();
+      const cat = (item.category || '').toLowerCase();
+      return name.includes(q) || desc.includes(q) || cat.includes(q);
+    });
+  });
+
+  // Group filtered items by category for display
+  let groupedItems = $derived.by(() => {
+    const groups: { label: string; items: SlashItem[] }[] = [];
+    const commands = filteredItems.filter(i => i.type === 'command');
+    const skillItems = filteredItems.filter(i => i.type === 'skill');
+
+    if (commands.length > 0) {
+      groups.push({ label: 'Commands', items: commands });
+    }
+
+    // Group skills by category
+    const catMap = new Map<string, SlashItem[]>();
+    for (const s of skillItems) {
+      const cat = s.category || 'Uncategorized';
+      if (!catMap.has(cat)) catMap.set(cat, []);
+      catMap.get(cat)!.push(s);
+    }
+    for (const [cat, items] of catMap) {
+      groups.push({ label: cat, items });
+    }
+
+    return groups;
+  });
+
+  // Flat list for keyboard navigation index
+  let flatFiltered = $derived(groupedItems.flatMap(g => g.items));
+
+  // Clamp selectedIndex when list changes
+  $effect(() => {
+    if (selectedIndex >= flatFiltered.length) {
+      selectedIndex = Math.max(0, flatFiltered.length - 1);
+    }
+  });
 
   export function handleKeydown(e: KeyboardEvent): boolean {
     if (!$showSlashPopup) return false;
@@ -29,17 +107,17 @@
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        selectedIndex = (selectedIndex + 1) % filteredCommands.length;
+        selectedIndex = (selectedIndex + 1) % flatFiltered.length;
         return true;
       case 'ArrowUp':
         e.preventDefault();
-        selectedIndex = (selectedIndex - 1 + filteredCommands.length) % filteredCommands.length;
+        selectedIndex = (selectedIndex - 1 + flatFiltered.length) % flatFiltered.length;
         return true;
       case 'Enter':
       case 'Tab':
         e.preventDefault();
-        if (filteredCommands.length > 0) {
-          selectCommand(filteredCommands[selectedIndex]);
+        if (flatFiltered.length > 0) {
+          selectItem(flatFiltered[selectedIndex]);
         }
         return true;
       case 'Escape':
@@ -50,16 +128,16 @@
     return false;
   }
 
-  /** Callback set by parent to receive selected command */
-  let _onSelect: ((cmd: SlashCommand) => void) | null = null;
+  /** Callback set by parent to receive selected item */
+  let _onSelect: ((item: SlashItem) => void) | null = null;
 
-  export function onSelect(callback: (cmd: SlashCommand) => void) {
+  export function onSelect(callback: (item: SlashItem) => void) {
     _onSelect = callback;
   }
 
-  function selectCommand(cmd: SlashCommand) {
+  function selectItem(item: SlashItem) {
     if (_onSelect) {
-      _onSelect(cmd);
+      _onSelect(item);
     }
     close();
   }
@@ -79,32 +157,40 @@
     filterText = '';
     selectedIndex = 0;
   }
+
+  function isSelected(item: SlashItem): boolean {
+    return flatFiltered[selectedIndex] === item;
+  }
 </script>
 
 {#if $showSlashPopup}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="slash-popup" onclick={(e) => e.stopPropagation()}>
-    <div class="slash-header">Commands</div>
-    {#each filteredCommands as cmd, i}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="slash-item"
-        class:selected={i === selectedIndex}
-        onclick={() => selectCommand(cmd)}
-        onmouseenter={() => selectedIndex = i}
-      >
-        <span class="slash-icon">{cmd.icon}</span>
-        <div class="slash-info">
-          <span class="slash-label">{cmd.label}</span>
-          <span class="slash-desc">{cmd.description}</span>
-        </div>
-      </div>
-    {/each}
-    {#if filteredCommands.length === 0}
-      <div class="slash-empty">No matching commands</div>
-    {/if}
+    <div class="slash-scroll">
+      {#each groupedItems as group}
+        <div class="slash-group-header">{group.label}</div>
+        {#each group.items as item}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="slash-item"
+            class:selected={isSelected(item)}
+            onclick={() => selectItem(item)}
+            onmouseenter={() => selectedIndex = flatFiltered.indexOf(item)}
+          >
+            <span class="slash-icon">{item.icon}</span>
+            <div class="slash-info">
+              <span class="slash-label">{item.label}</span>
+              <span class="slash-desc">{item.description}</span>
+            </div>
+          </div>
+        {/each}
+      {/each}
+      {#if flatFiltered.length === 0}
+        <div class="slash-empty">No matching commands or skills</div>
+      {/if}
+    </div>
   </div>
 {/if}
 
@@ -123,21 +209,34 @@
     z-index: 100;
   }
 
-  .slash-header {
+  .slash-scroll {
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .slash-group-header {
     padding: 6px 12px 4px;
     font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--color-muted);
-    border-bottom: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    background: var(--color-sidebar);
+    z-index: 1;
+  }
+
+  .slash-group-header:first-child {
+    border-top: none;
   }
 
   .slash-item {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 6px 12px;
     cursor: pointer;
     transition: background 0.1s;
   }
@@ -148,9 +247,9 @@
   }
 
   .slash-icon {
-    font-size: 16px;
+    font-size: 14px;
     flex-shrink: 0;
-    width: 24px;
+    width: 22px;
     text-align: center;
   }
 
@@ -169,7 +268,7 @@
   }
 
   .slash-desc {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--color-muted);
     white-space: nowrap;
     overflow: hidden;

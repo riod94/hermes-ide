@@ -355,29 +355,27 @@
   // Setup slash command selection callback
   $effect(() => {
     if (slashPopupComponent) {
-      slashPopupComponent.onSelect((cmd: { id: string; label: string }) => {
+      slashPopupComponent.onSelect((item: { id: string; label: string; type: string }) => {
         stripSlashText();
 
-        let message = '';
-        switch (cmd.id) {
-          case 'skills':
-            message = 'List all available skills with their descriptions.';
-            break;
-          case 'new-skill':
-            message = 'Save what we discussed in this conversation as a new reusable skill.';
-            break;
-          case 'expert':
-            // For expert mode, populate input with prefix instead of auto-send
-            if (editorEl) {
-              editorEl.textContent = '[Expert Mode] ';
-              placeCaretAtEnd();
-              autoResize();
-            }
-            return; // Don't auto-send
-        }
-
-        if (message) {
-          vscode.postMessage({ type: 'chatMessage', value: message });
+        if (item.type === 'command') {
+          switch (item.id) {
+            case 'cmd:new-skill':
+              vscode.postMessage({ type: 'chatMessage', value: 'Save what we discussed in this conversation as a new reusable skill.' });
+              return;
+            case 'cmd:expert':
+              // Populate input with prefix for user to complete
+              if (editorEl) {
+                editorEl.textContent = '[Expert Mode] ';
+                placeCaretAtEnd();
+                autoResize();
+              }
+              return;
+          }
+        } else if (item.type === 'skill') {
+          // Skill selected — send "load skill" command
+          const skillName = item.id.replace('skill:', '');
+          vscode.postMessage({ type: 'chatMessage', value: `Load skill \`${skillName}\` and tell me what it does.` });
         }
       });
     }
