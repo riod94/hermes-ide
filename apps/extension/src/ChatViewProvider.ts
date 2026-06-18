@@ -146,6 +146,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'showWarning':
           vscode.window.showWarningMessage(data.value);
           break;
+        case 'checkpointAction':
+          this._handleCheckpointAction(data.action, data.checkpoint);
+          break;
+        case 'openLink':
+          if (data.value) {
+            vscode.env.openExternal(vscode.Uri.parse(data.value));
+          }
+          break;
       }
     });
 
@@ -1007,6 +1015,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // Re-send the same message (without attachments since context was already built)
     // We call _handleChatMessage again which will rebuild context
     await this._handleChatMessage(lastUserMsg.content);
+  }
+
+  /** Handle checkpoint approve/revise action from webview */
+  private async _handleCheckpointAction(action: string, checkpointNumber: number) {
+    const responseText = action === 'approve'
+      ? 'approve'
+      : `revise checkpoint ${checkpointNumber}`;
+
+    // Send as a regular chat message from user
+    await this._handleChatMessage(responseText);
   }
 
   /** Unsend a user message — rollback conversation and populate input for editing */
