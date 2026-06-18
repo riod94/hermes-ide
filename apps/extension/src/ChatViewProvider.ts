@@ -165,6 +165,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }) => {
       this._showDiffInWebview(payload);
     });
+
+    // Register "Add Selection to Chat" command (Ctrl+L / Cmd+L)
+    vscode.commands.registerCommand('hermes.addToChat', async () => {
+      await this._handleAddToChat();
+    });
   }
 
   /** Send a message to the webview */
@@ -1025,6 +1030,82 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // Send as a regular chat message from user
     await this._handleChatMessage(responseText);
+  }
+
+  /** Add selected text from editor/terminal to chat input (Ctrl+L / Cmd+L) */
+  private async _handleAddToChat() {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      // Try terminal selection
+      await vscode.commands.executeCommand('workbench.action.terminal.copySelection');
+      // Terminal selection goes to clipboard — read from there
+      const clipboard = await vscode.env.clipboard.readText();
+      if (clipboard && clipboard.trim()) {
+        this._insertSelectionToChat(clipboard.trim(), 'terminal');
+      }
+      return;
+    }
+
+    const doc = editor.document;
+    const selections = editor.selections;
+
+    // Gather selected text from all selections (multi-cursor support)
+    const selectedTexts = selections
+      .map(sel => doc.getText(sel))
+      .filter(t => t.trim().length > 0);
+
+    if (selectedTexts.length === 0) {
+      // No selection — select the entire current line
+      const line = doc.lineAt(editor.selection.active.line);
+      const lineText = line.text.trim();
+      if (lineText) {
+        const relPath = vscode.workspace.asRelativePath(doc.uri);
+        const lineNum = line.lineNumber + 1;
+        this._insertSelectionToChat(lineText, 'editor', relPath, lineNum);
+      }
+      return;
+    }
+
+    const combined = selectedTexts.join('\n');
+    const relPath = vscode.workspace.asRelativePath(doc.uri);
+    const startLine = selections[0].start.line + 1;
+    const endLine = selections[selections.length - 1].end.line + 1;
+
+    this._insertSelectionToChat(combined, 'editor', relPath, startLine, endLine);
+  }
+
+  /** Format selection and send to webview chat input */
+  private _insertSelectionToChat(
+    text: string,
+    source: 'editor' | 'terminal',
+    filePath?: string,
+    startLine?: number,
+    endLine?: number
+  ) {
+    // Format as code block with metadata
+    let formatted: string;
+
+    if (source === 'terminal') {
+      formatted = `\`\`\`terminal\n${text}\n\`\`\``;
+    } else if (filePath) {
+      const lineInfo = startLine && endLine && startLine !== endLine
+        ? `:${startLine}-${endLine}`
+        : startLine
+          ? `:${startLine}`
+          : '';
+      formatted = `\`\`\`${filePath}${lineInfo}\n${text}\n\`\`\``;
+    } else {
+      formatted = `\`\`\`\n${text}\n\`\`\``;
+    }
+
+    // Ensure Hermes sidebar is visible
+    vscode.commands.executeCommand('hermes.chatView.focus');
+
+    // Send to webview — append to current input (don't replace)
+    this.postMessage({
+      type: 'appendToInput',
+      text: formatted,
+    });
   }
 
   /** Unsend a user message — rollback conversation and populate input for editing */

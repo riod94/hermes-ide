@@ -3,7 +3,7 @@
   "displayName": "Hermes IDE",
   "publisher": "nusawork",
   "description": "Agentic Browser IDE extension for Hermes AI — Chat with AI, review code diffs, and accept/reject proposed changes directly in your editor.",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "license": "UNLICENSED",
   "icon": "assets/icon.png",
   "repository": {
@@ -73,8 +73,36 @@
         "command": "hermes.showDiffControls",
         "title": "Hermes: Show Diff Controls",
         "category": "Hermes"
+      },
+      {
+        "command": "hermes.addToChat",
+        "title": "Hermes: Add Selection to Chat",
+        "category": "Hermes"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "hermes.addToChat",
+        "key": "ctrl+l",
+        "mac": "cmd+l",
+        "when": "editorTextFocus || terminalFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "hermes.addToChat",
+          "when": "editorHasSelection",
+          "group": "hermes@1"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "hermes.addToChat",
+          "group": "hermes@1"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "bun run esbuild-base --minify",
