@@ -137,6 +137,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'localFileAttached':
           this._handleLocalFileAttached(data.file);
           break;
+        case 'retryMessage':
+          this._handleRetryMessage();
+          break;
       }
     });
 
@@ -974,9 +977,35 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   // ───────────────── Chat Message Handling ─────────────────
 
+  /** Retry the last failed message */
+  private async _handleRetryMessage() {
+    // Find the last user message in history
+    let lastUserMsg: SessionMessage | undefined;
+    let lastUserIdx = -1;
+    for (let i = this._currentMessages.length - 1; i >= 0; i--) {
+      if (this._currentMessages[i].role === 'user') {
+        lastUserMsg = this._currentMessages[i];
+        lastUserIdx = i;
+        break;
+      }
+    }
+
+    if (!lastUserMsg) return;
+
+    // Remove the error assistant message(s) after last user message
+    this._currentMessages = this._currentMessages.slice(0, lastUserIdx + 1);
+
+    // Clear error messages from webview and re-send
+    this.postMessage({ type: 'clearLastError' });
+
+    // Re-send the same message (without attachments since context was already built)
+    // We call _handleChatMessage again which will rebuild context
+    await this._handleChatMessage(lastUserMsg.content);
+  }
+
   /** Handle incoming chat message from user */
   private async _handleChatMessage(text: string, attachments?: Array<{ type: string; name: string; path: string; content?: string; base64Data?: string; mimeType?: string }>) {
-    // Track user message
+    // Track user message (include attachments metadata for display)
     const userMsg: SessionMessage = {
       id: `msg-${Date.now()}-user`,
       role: 'user',
@@ -985,11 +1014,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     };
     this._currentMessages.push(userMsg);
 
+    // Send user message with attachment info for bubble display
     this.postMessage({
       type: 'addMessage',
       message: {
         ...userMsg,
         status: 'done',
+        attachments: attachments?.map(a => ({
+          type: a.type,
+          name: a.name,
+          path: a.path,
+          // Don't send base64/content to webview display — too heavy
+        })) || undefined,
       },
     });
 
@@ -1117,6 +1153,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     let fullContent = '';
+    let hadError = false;
     try {
       await this._hermesClient.streamChat(text, contextString, (chunk: string) => {
         fullContent += chunk;
@@ -1129,14 +1166,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }, imageAttachments.length > 0 ? imageAttachments : undefined);
     } catch (e: any) {
       console.error(e);
-      fullContent += `\n\nError: ${e.message}`;
+      fullContent += `\n\n[Error: ${e.message}]`;
+      hadError = true;
     }
 
     this.postMessage({
       type: 'updateMessage',
       id: responseId,
       content: fullContent,
-      status: 'done'
+      status: hadError ? 'error' : 'done'
     });
 
     // Track assistant message and auto-save

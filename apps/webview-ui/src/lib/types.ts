@@ -5,6 +5,8 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   status?: 'sending' | 'streaming' | 'done' | 'error';
+  /** Attachments shown in user message bubble */
+  attachments?: ContextAttachment[];
 }
 
 /** VS Code API interface for type safety */
@@ -63,7 +65,8 @@ export type OutgoingMessage =
   | { type: 'pickUrl' }
   | { type: 'pickAttachment' }
   | { type: 'pickImage' }
-  | { type: 'localFileAttached'; file: { name: string; fileType: 'file' | 'image'; content?: string; base64Data?: string; mimeType?: string; size: number } };
+  | { type: 'localFileAttached'; file: { name: string; fileType: 'file' | 'image'; content?: string; base64Data?: string; mimeType?: string; size: number } }
+  | { type: 'retryMessage'; value: string; attachments?: ContextAttachment[] };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
@@ -86,4 +89,5 @@ export type IncomingMessage =
   | { type: 'modelsLoaded'; models: ModelInfo[]; activeModel: string }
   | { type: 'modelChanged'; model: string }
   | { type: 'attachmentAdded'; attachment: ContextAttachment }
-  | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] };
+  | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] }
+  | { type: 'clearLastError' };

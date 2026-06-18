@@ -112,6 +112,19 @@
           }]);
           break;
         }
+        case 'clearLastError': {
+          // Remove last error assistant message for retry
+          messages.update((msgs) => {
+            // Find last message with error status or error content
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].role === 'assistant' && (msgs[i].status === 'error' || msgs[i].content.includes('[Error:'))) {
+                return msgs.filter((_, idx) => idx !== i);
+              }
+            }
+            return msgs;
+          });
+          break;
+        }
       }
     }
     window.addEventListener('message', handleMessage);
