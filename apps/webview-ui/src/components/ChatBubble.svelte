@@ -1,12 +1,14 @@
 <script lang="ts">
   import type { ChatMessage } from '../lib/types';
   import { vscode } from '../lib/vscode';
+  import { isLoading } from '../lib/store';
 
   interface Props {
     message: ChatMessage;
+    isLast?: boolean;
   }
 
-  let { message }: Props = $props();
+  let { message, isLast = false }: Props = $props();
 
   const isUser = $derived(message.role === 'user');
   const isError = $derived(
@@ -18,6 +20,9 @@
   const timeStr = $derived(
     new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   );
+
+  /** Whether unsend button is visible (hover state) */
+  let showUnsend = $state(false);
 
   /** Icon for attachment type */
   function attachIcon(type: string): string {
@@ -33,10 +38,15 @@
   }
 
   function handleRetry() {
-    // Find the last user message before this error message
-    // We post a retryMessage to the extension host
     vscode.postMessage({
       type: 'retryMessage',
+    });
+  }
+
+  function handleUnsend() {
+    vscode.postMessage({
+      type: 'unsendMessage',
+      messageId: message.id,
     });
   }
 </script>
@@ -68,12 +78,28 @@
       </div>
     {/if}
 
-    <!-- Bubble -->
-    <div class="px-3 py-2 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap break-words"
-         style="background: {isUser ? 'var(--color-user-bubble)' : 'var(--color-agent-bubble)'};
-                color: {isUser ? 'var(--color-btn-fg)' : 'var(--color-fg)'};
-                border-bottom-{isUser ? 'right' : 'left'}-radius: 4px;">
-      {message.content}
+    <!-- Bubble with hover for unsend -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="bubble-wrapper"
+         onmouseenter={() => { if (isUser) showUnsend = true; }}
+         onmouseleave={() => showUnsend = false}>
+      <div class="px-3 py-2 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap break-words"
+           style="background: {isUser ? 'var(--color-user-bubble)' : 'var(--color-agent-bubble)'};
+                  color: {isUser ? 'var(--color-btn-fg)' : 'var(--color-fg)'};
+                  border-bottom-{isUser ? 'right' : 'left'}-radius: 4px;">
+        {message.content}
+      </div>
+
+      <!-- Unsend button (visible on hover, only for user messages, not while loading) -->
+      {#if isUser && showUnsend && !$isLoading}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="unsend-actions">
+          <span class="unsend-btn" onclick={handleUnsend} title="Unsend & edit this message">
+            ◀️ Unsend
+          </span>
+        </div>
+      {/if}
     </div>
 
     <!-- Timestamp + Status + Retry -->
@@ -144,5 +170,33 @@
   .retry-btn:hover {
     background: var(--color-accent);
     color: var(--color-bg);
+  }
+
+  /* ── Unsend button ── */
+  .bubble-wrapper {
+    position: relative;
+  }
+
+  .unsend-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 2px;
+  }
+
+  .unsend-btn {
+    font-size: 10px;
+    color: var(--color-muted);
+    cursor: pointer;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .unsend-btn:hover {
+    background: #f38ba8;
+    color: var(--color-bg);
+    border-color: #f38ba8;
   }
 </style>

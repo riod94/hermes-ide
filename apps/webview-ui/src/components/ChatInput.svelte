@@ -1,6 +1,6 @@
 <script lang="ts">
   import { vscode } from '../lib/vscode';
-  import { activeModel, showModelSelector, attachments, showMentionPopup } from '../lib/store';
+  import { activeModel, showModelSelector, attachments, showMentionPopup, editText } from '../lib/store';
   import type { ContextAttachment } from '../lib/types';
   import MentionPopup from './MentionPopup.svelte';
 
@@ -15,6 +15,22 @@
   let mentionPopupComponent: MentionPopup | undefined = $state();
   let showAttachMenu = $state(false);
   let fileInputEl: HTMLInputElement | undefined = $state();
+
+  // Watch editText store for unsend/edit population
+  $effect(() => {
+    const text = $editText;
+    if (text) {
+      inputText = text;
+      editText.set('');
+      // Focus and auto-resize after next tick
+      requestAnimationFrame(() => {
+        if (textareaEl) {
+          textareaEl.focus();
+          autoResize();
+        }
+      });
+    }
+  });
 
   function send() {
     const trimmed = inputText.trim();
@@ -158,8 +174,7 @@
   /** Image MIME types for detection */
   const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
   const IMAGE_MIME_PREFIXES = ['image/'];
-  const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
-  const MAX_TEXT_SIZE = 10 * 1024; // 10KB
+  const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB (uniform for all file types)
 
   function handleLocalFileSelected(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -171,8 +186,9 @@
 
     if (isImage) {
       // Image: check size, read as base64
-      if (file.size > MAX_IMAGE_SIZE) {
-        vscode.postMessage({ type: 'chatMessage', value: `⚠️ Image too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 2MB.` });
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`⚠️ Image too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 2MB.`);
+        input.value = '';
         return;
       }
       const reader = new FileReader();
@@ -197,8 +213,9 @@
       reader.readAsDataURL(file);
     } else {
       // Text file: check size, read as text
-      if (file.size > MAX_TEXT_SIZE) {
-        vscode.postMessage({ type: 'chatMessage', value: `⚠️ File too large (${(file.size / 1024).toFixed(0)}KB). Max 10KB for text files.` });
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`⚠️ File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 2MB.`);
+        input.value = '';
         return;
       }
       const reader = new FileReader();

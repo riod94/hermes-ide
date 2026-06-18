@@ -140,6 +140,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'retryMessage':
           this._handleRetryMessage();
           break;
+        case 'unsendMessage':
+          this._handleUnsendMessage(data.messageId);
+          break;
       }
     });
 
@@ -1001,6 +1004,31 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // Re-send the same message (without attachments since context was already built)
     // We call _handleChatMessage again which will rebuild context
     await this._handleChatMessage(lastUserMsg.content);
+  }
+
+  /** Unsend a user message — rollback conversation and populate input for editing */
+  private async _handleUnsendMessage(messageId: string) {
+    // Find the message index in history
+    const msgIdx = this._currentMessages.findIndex(m => m.id === messageId);
+    if (msgIdx === -1) return;
+
+    const unsendMsg = this._currentMessages[msgIdx];
+    if (unsendMsg.role !== 'user') return;
+
+    // Remove this message and everything after it (including assistant response)
+    this._currentMessages = this._currentMessages.slice(0, msgIdx);
+
+    // Also reset conversation history on HermesClient — rebuild from remaining messages
+    this._hermesClient.resetConversation();
+
+    // Tell webview to remove messages from this index onwards
+    this.postMessage({ type: 'removeMessages', fromIndex: msgIdx });
+
+    // Populate the input with the unsent message text
+    this.postMessage({ type: 'populateInput', text: unsendMsg.content });
+
+    // Auto-save the trimmed session
+    await this._autoSaveSession();
   }
 
   /** Handle incoming chat message from user */

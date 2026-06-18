@@ -66,7 +66,8 @@ export type OutgoingMessage =
   | { type: 'pickAttachment' }
   | { type: 'pickImage' }
   | { type: 'localFileAttached'; file: { name: string; fileType: 'file' | 'image'; content?: string; base64Data?: string; mimeType?: string; size: number } }
-  | { type: 'retryMessage'; value: string; attachments?: ContextAttachment[] };
+  | { type: 'retryMessage'; value: string; attachments?: ContextAttachment[] }
+  | { type: 'unsendMessage'; messageId: string };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
@@ -90,4 +91,6 @@ export type IncomingMessage =
   | { type: 'modelChanged'; model: string }
   | { type: 'attachmentAdded'; attachment: ContextAttachment }
   | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] }
-  | { type: 'clearLastError' };
+  | { type: 'clearLastError' }
+  | { type: 'populateInput'; text: string }
+  | { type: 'removeMessages'; fromIndex: number };

@@ -10,7 +10,7 @@
     messages, isLoading, updateMessage, clearMessages,
     sessions, activeSessionId, activeSessionTitle, showSessionList,
     models, activeModel, showModelSelector,
-    attachments,
+    attachments, editText,
   } from './lib/store';
   import { vscode } from './lib/vscode';
   import type { IncomingMessage } from './lib/types';
@@ -123,6 +123,18 @@
             }
             return msgs;
           });
+          break;
+        }
+        case 'populateInput': {
+          // Pre-fill the chat input with unsent message text
+          const popMsg = msg as any;
+          editText.set(popMsg.text);
+          break;
+        }
+        case 'removeMessages': {
+          // Remove messages from a certain index onwards (for unsend rollback)
+          const rmMsg = msg as any;
+          messages.update((msgs) => msgs.slice(0, rmMsg.fromIndex));
           break;
         }
       }
