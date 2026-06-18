@@ -143,6 +143,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'unsendMessage':
           this._handleUnsendMessage(data.messageId);
           break;
+        case 'showWarning':
+          vscode.window.showWarningMessage(data.value);
+          break;
       }
     });
 

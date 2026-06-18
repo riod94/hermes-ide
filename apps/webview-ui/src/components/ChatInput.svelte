@@ -175,26 +175,67 @@
   const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
   const IMAGE_MIME_PREFIXES = ['image/'];
   const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB (uniform for all file types)
+  const MAX_FILES = 5;
+
+  /** Show warning via extension host (alert() is blocked in webview CSP) */
+  function showWarning(msg: string) {
+    vscode.postMessage({ type: 'showWarning', value: msg });
+  }
 
   function handleLocalFileSelected(e: Event) {
     const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
+    const files = input.files;
+    if (!files || files.length === 0) return;
 
+    // Check max files limit
+    if (files.length > MAX_FILES) {
+      showWarning(`Max ${MAX_FILES} files at a time. You selected ${files.length}.`);
+      input.value = '';
+      return;
+    }
+
+    // Count existing attachments to enforce total limit
+    let currentCount = 0;
+    attachments.subscribe((v: ContextAttachment[]) => currentCount = v.length)();
+    if (currentCount + files.length > MAX_FILES) {
+      showWarning(`Max ${MAX_FILES} attachments total. Already have ${currentCount}, tried to add ${files.length}.`);
+      input.value = '';
+      return;
+    }
+
+    // Process each selected file
+    const oversized: string[] = [];
+    const validFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > MAX_FILE_SIZE) {
+        oversized.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    // Warn about oversized files
+    if (oversized.length > 0) {
+      showWarning(`Files exceed 2MB limit:\n${oversized.join('\n')}`);
+    }
+
+    // Process valid files
+    for (const file of validFiles) {
+      processFile(file);
+    }
+
+    input.value = '';
+  }
+
+  function processFile(file: File) {
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     const isImage = IMAGE_EXTENSIONS.has(ext) || IMAGE_MIME_PREFIXES.some(p => file.type.startsWith(p));
 
     if (isImage) {
-      // Image: check size, read as base64
-      if (file.size > MAX_FILE_SIZE) {
-        alert(`⚠️ Image too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 2MB.`);
-        input.value = '';
-        return;
-      }
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
-        // dataUrl format: "data:image/png;base64,xxxxx"
         const commaIdx = dataUrl.indexOf(',');
         const base64Data = dataUrl.slice(commaIdx + 1);
         const mimeType = file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
@@ -212,12 +253,6 @@
       };
       reader.readAsDataURL(file);
     } else {
-      // Text file: check size, read as text
-      if (file.size > MAX_FILE_SIZE) {
-        alert(`⚠️ File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 2MB.`);
-        input.value = '';
-        return;
-      }
       const reader = new FileReader();
       reader.onload = () => {
         const content = reader.result as string;
@@ -332,10 +367,11 @@
       </div>
     </div>
 
-    <!-- Hidden file input for local upload -->
+    <!-- Hidden file input for local upload (multiple, max 5) -->
     <input
       bind:this={fileInputEl}
       type="file"
+      multiple
       accept="image/*,.txt,.md,.json,.csv,.log,.yaml,.yml,.xml,.js,.ts,.py,.php,.html,.css,.scss,.sh,.bash,.sql,.env,.cfg,.ini,.toml"
       onchange={handleLocalFileSelected}
       style="display: none;"
