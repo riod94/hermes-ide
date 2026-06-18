@@ -281,6 +281,13 @@ server {
 
     client_max_body_size 200M;
 
+    # Auth gate: intercept code-server /login page
+    # If user hits /login directly (no session cookie), redirect to auth portal
+    location = /login {
+        # Redirect to auth portal — user must authenticate there first
+        return 302 https://${AUTH_PORTAL_DOMAIN}/?redirect=${subdomain};
+    }
+
     # MCP Server (systemd service on host)
     # Hermes Agent connects here: https://${subdomain}.${IDE_DOMAIN}/mcp
     location /mcp {

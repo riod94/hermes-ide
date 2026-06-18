@@ -39,9 +39,9 @@
             checkingSession = false;
             return;
           } else {
-            // Developer — redirect
-            const host = window.location.hostname;
-            window.location.href = `http://${host}:${sessionPort}/`;
+            // Developer — redirect via proxy login (sets code-server session cookie)
+            const token = btoa(`${session.name}:${session.password}`);
+            window.location.href = `${window.location.origin}/api/open-ide?name=${encodeURIComponent(session.name)}&token=${encodeURIComponent(token)}`;
             return;
           }
         }
