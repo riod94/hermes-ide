@@ -1,8 +1,9 @@
 <script lang="ts">
   import { vscode } from '../lib/vscode';
-  import { activeModel, showModelSelector, attachments, showMentionPopup, editText } from '../lib/store';
+  import { activeModel, showModelSelector, attachments, showMentionPopup, showSlashPopup, editText } from '../lib/store';
   import type { ContextAttachment } from '../lib/types';
   import MentionPopup from './MentionPopup.svelte';
+  import SlashCommandPopup from './SlashCommandPopup.svelte';
 
   interface Props {
     disabled?: boolean;
@@ -12,6 +13,7 @@
 
   let editorEl: HTMLDivElement | undefined = $state();
   let mentionPopupComponent: MentionPopup | undefined = $state();
+  let slashPopupComponent: SlashCommandPopup | undefined = $state();
   let showAttachMenu = $state(false);
   let fileInputEl: HTMLInputElement | undefined = $state();
 
@@ -203,6 +205,7 @@
     // Clear attachment bar
     attachments.set([]);
     showMentionPopup.set(false);
+    showSlashPopup.set(false);
 
     autoResize();
   }
@@ -210,6 +213,11 @@
   function handleKeydown(e: KeyboardEvent) {
     // Let mention popup handle keys first
     if (mentionPopupComponent?.handleKeydown(e)) {
+      return;
+    }
+
+    // Let slash command popup handle keys
+    if (slashPopupComponent?.handleKeydown(e)) {
       return;
     }
 
@@ -222,6 +230,7 @@
   function handleInput() {
     autoResize();
     detectMention();
+    detectSlashCommand();
   }
 
   function autoResize() {
@@ -300,9 +309,77 @@
     return slashIndex > -1 ? modelId.slice(slashIndex + 1) : modelId;
   }
 
+  // ─── Slash Command Detection ───
+
+  function detectSlashCommand() {
+    if (!editorEl) return;
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    if (!editorEl.contains(range.commonAncestorContainer)) return;
+
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) {
+      showSlashPopup.set(false);
+      slashPopupComponent?.reset();
+      return;
+    }
+
+    // Only trigger if `/` is at the beginning of the entire input (no prior text/chips)
+    const fullText = getPlainText();
+    const textBeforeCursor = (node.textContent || '').slice(0, range.startOffset);
+
+    // Check: is this the first text node and does it start with `/`?
+    const isFirstNode = editorEl.firstChild === node || 
+      (editorEl.firstChild?.nodeType === Node.TEXT_NODE && editorEl.firstChild === node);
+    
+    if (isFirstNode && fullText.match(/^\/\w*$/) && textBeforeCursor.match(/^\/(\w*)$/)) {
+      const match = textBeforeCursor.match(/^\/(\w*)$/);
+      showSlashPopup.set(true);
+      slashPopupComponent?.setFilter('/' + (match?.[1] || ''));
+    } else {
+      showSlashPopup.set(false);
+      slashPopupComponent?.reset();
+    }
+  }
+
+  /** Strip slash command text from input after selection */
+  function stripSlashText() {
+    if (!editorEl) return;
+    // Simply clear the entire input since slash commands are always the full input
+    editorEl.innerHTML = '';
+  }
+
+  // Setup slash command selection callback
   $effect(() => {
-    if (!$showMentionPopup) {
-      // Mention popup closed
+    if (slashPopupComponent) {
+      slashPopupComponent.onSelect((cmd: { id: string; label: string }) => {
+        stripSlashText();
+
+        let message = '';
+        switch (cmd.id) {
+          case 'skills':
+            message = 'List all available skills with their descriptions.';
+            break;
+          case 'new-skill':
+            message = 'Save what we discussed in this conversation as a new reusable skill.';
+            break;
+          case 'expert':
+            // For expert mode, populate input with prefix instead of auto-send
+            if (editorEl) {
+              editorEl.textContent = '[Expert Mode] ';
+              placeCaretAtEnd();
+              autoResize();
+            }
+            return; // Don't auto-send
+        }
+
+        if (message) {
+          vscode.postMessage({ type: 'chatMessage', value: message });
+        }
+      });
     }
   });
 
@@ -585,6 +662,7 @@
   <!-- Input row: rich text editor + send button -->
   <div class="input-row-wrapper" style="position: relative;">
     <MentionPopup bind:this={mentionPopupComponent} />
+    <SlashCommandPopup bind:this={slashPopupComponent} />
 
     <div class="flex items-end gap-2 px-3 pt-3 pb-1">
       <!-- Rich text input (contenteditable) -->
@@ -599,7 +677,7 @@
         onkeydown={handleKeydown}
         oninput={handleInput}
         onpaste={handlePaste}
-        data-placeholder="Ask Hermes something… (type @ for context)"
+        data-placeholder="Ask Hermes something… (@ for context, / for commands)"
         class="rich-input flex-1 rounded-lg px-3 py-2 text-[13px] leading-normal outline-none transition-colors"
         style="background: var(--color-input-bg);
                color: var(--color-input-fg);

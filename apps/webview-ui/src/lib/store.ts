@@ -46,6 +46,9 @@ export const attachments = writable<ContextAttachment[]>([]);
 /** Whether mention popup is visible */
 export const showMentionPopup = writable(false);
 
+/** Whether slash command popup is visible */
+export const showSlashPopup = writable(false);
+
 /** Pre-filled text for input (from unsend/edit) */
 export const editText = writable<string>('');
 
