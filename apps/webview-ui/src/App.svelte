@@ -117,8 +117,7 @@
         case 'modelChanged': {
           const chgMsg = msg as any;
           activeModel.set(chgMsg.model);
-          // Keep settings.defaultModel in sync
-          settings.update((s: any) => ({ ...s, defaultModel: chgMsg.model }));
+          // Do not sync to settings.defaultModel here, as it overrides user preference
           break;
         }
         case 'skillsLoaded': {

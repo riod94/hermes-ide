@@ -921,6 +921,9 @@ var ChatViewProvider = class _ChatViewProvider {
     }
     this._hermesClient.resetConversation();
     this._currentMessages = [];
+    const settings = this._context.globalState.get("hermes.settings") || {};
+    const defaultModel = settings.defaultModel || "hermes-agent";
+    await this._handleSetModel({ id: defaultModel });
     const session = await this._sessionManager.createSession(
       this._hermesClient.getConversationId()
     );

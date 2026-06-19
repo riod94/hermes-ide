@@ -250,6 +250,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this._hermesClient.resetConversation();
     this._currentMessages = [];
 
+    // Reset model to defaultModel
+    const settings = this._context.globalState.get<Record<string, unknown>>('hermes.settings') || {};
+    const defaultModel = (settings.defaultModel as string) || 'hermes-agent';
+    await this._handleSetModel({ id: defaultModel });
+
     // Create new session
     const session = await this._sessionManager.createSession(
       this._hermesClient.getConversationId()

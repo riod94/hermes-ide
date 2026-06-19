@@ -28,9 +28,8 @@
     activeModel.set(modelId);
     showModelSelector.set(false);
     vscode.postMessage({ type: 'setModel', value: { id: modelId } });
-    // Keep settings.defaultModel in sync
-    settings.update((s: Settings) => ({ ...s, defaultModel: modelId }));
-    vscode.postMessage({ type: 'updateSettings', settings: { defaultModel: modelId } });
+    // Do NOT update settings.defaultModel here! 
+    // Changing model in current session should not override the global default model.
   }
 
   function handleBackdropClick() {
