@@ -239,11 +239,8 @@
             value={localSettings.defaultModel}
             onchange={handleDefaultModel}
           >
-            <option value="hermes-agent">hermes-agent</option>
-            {#each $models as model}
-              {#if model.id !== 'hermes-agent'}
-                <option value={model.id}>{shortModelName(model.id)}</option>
-              {/if}
+            {#each $models as model (model.id)}
+              <option value={model.id}>{shortModelName(model.id)}</option>
             {/each}
           </select>
         </div>
