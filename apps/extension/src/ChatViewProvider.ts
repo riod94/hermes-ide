@@ -160,6 +160,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             vscode.env.openExternal(vscode.Uri.parse(data.value));
           }
           break;
+        // Settings management messages
+        case 'getSettings':
+          this._handleGetSettings();
+          break;
+        case 'updateSettings':
+          this._handleUpdateSettings(data.settings);
+          break;
+        case 'scanRuleFiles':
+          this._handleScanRuleFiles();
+          break;
       }
     });
 
@@ -219,6 +229,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // Fetch and send skills
     this._handleGetSkills();
+
+    // Send settings to webview
+    this._handleGetSettings();
   }
 
   /** Create new session (save current first) */
@@ -236,6 +249,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // Reset client
     this._hermesClient.resetConversation();
     this._currentMessages = [];
+
+    // Reset model to defaultModel
+    const settings = this._context.globalState.get<Record<string, unknown>>('hermes.settings') || {};
+    const defaultModel = (settings.defaultModel as string) || 'hermes-agent';
+    await this._handleSetModel({ id: defaultModel });
 
     // Create new session
     const session = await this._sessionManager.createSession(
@@ -376,6 +394,94 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       type: 'modelChanged',
       model: data.id,
     });
+  }
+
+  // ───────────────── Settings Management ─────────────────
+
+  /** Default settings (mirroring webview-ui types) */
+  private static readonly DEFAULT_SETTINGS = {
+    fontSize: 13,
+    sendOnEnter: true,
+    autoScroll: true,
+    showTimestamps: false,
+    compactMode: false,
+    defaultRules: [] as string[],
+    customInstructions: '',
+    defaultModel: 'hermes-agent',
+  };
+
+  /** Get settings from globalState and send to webview */
+  private _handleGetSettings() {
+    const saved = this._context.globalState.get<Record<string, unknown>>('hermes.settings');
+    const settings = { ...ChatViewProvider.DEFAULT_SETTINGS, ...saved };
+    this.postMessage({ type: 'settingsLoaded', settings });
+  }
+
+  /** Update settings in globalState */
+  private async _handleUpdateSettings(newSettings: Record<string, unknown>) {
+    const saved = this._context.globalState.get<Record<string, unknown>>('hermes.settings');
+    const merged = { ...ChatViewProvider.DEFAULT_SETTINGS, ...saved, ...newSettings };
+    await this._context.globalState.update('hermes.settings', merged);
+    this.postMessage({ type: 'settingsLoaded', settings: merged });
+
+    // Sync defaultModel → activeModel so the model switcher stays in sync
+    if (typeof merged.defaultModel === 'string') {
+      const currentActive = this._context.globalState.get<string>('hermes.activeModel');
+      if (currentActive !== merged.defaultModel) {
+        await this._handleSetModel({ id: merged.defaultModel });
+      }
+    }
+  }
+
+  /** Scan workspace for known rule/guidelines files */
+  private async _handleScanRuleFiles() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      this.postMessage({ type: 'ruleFilesFound', files: [] });
+      return;
+    }
+
+    const rulePatterns = [
+      '.cursorrules', '.cursorignore',
+      'AGENTS.md', 'CLAUDE.md', 'COPILOT.md', 'RULES.md',
+      'CONVENTIONS.md', 'GUIDELINES.md', 'CONTRIBUTING.md',
+      'CODING_STANDARDS.md', '.editorconfig',
+      '.eslintrc', '.eslintrc.js', '.eslintrc.json', '.eslintrc.yml',
+      '.prettierrc', '.prettierrc.js', '.prettierrc.json',
+      'eslint.config.js', 'eslint.config.mjs',
+      'biome.json', 'biome.jsonc',
+      '.stylelintrc', '.stylelintrc.json',
+    ];
+
+    const foundFiles: Array<{ name: string; path: string }> = [];
+
+    for (const pattern of rulePatterns) {
+      const matches = await vscode.workspace.findFiles(
+        `**/${pattern}`,
+        '{**/node_modules/**,**/dist/**,**/.git/**,**/vendor/**}',
+        5
+      );
+      for (const uri of matches) {
+        const relativePath = vscode.workspace.asRelativePath(uri);
+        foundFiles.push({
+          name: relativePath.split('/').pop() || relativePath,
+          path: relativePath,
+        });
+      }
+    }
+
+    // Deduplicate by path
+    const unique = Array.from(
+      new Map(foundFiles.map(f => [f.path, f])).values()
+    ).sort((a, b) => a.path.localeCompare(b.path));
+
+    this.postMessage({ type: 'ruleFilesFound', files: unique });
+  }
+
+  /** Get current settings (for use in _handleChatMessage) */
+  private _getCurrentSettings(): typeof ChatViewProvider.DEFAULT_SETTINGS {
+    const saved = this._context.globalState.get<Record<string, unknown>>('hermes.settings');
+    return { ...ChatViewProvider.DEFAULT_SETTINGS, ...saved } as typeof ChatViewProvider.DEFAULT_SETTINGS;
   }
 
   // ───────────────── Diff Handling ─────────────────
@@ -1248,6 +1354,32 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         
         if (errors) {
           contextString += `Current Linter Errors:\n${errors}\n`;
+        }
+      }
+    }
+
+    // Inject custom instructions and default rules from settings
+    const currentSettings = this._getCurrentSettings();
+
+    if (currentSettings.customInstructions) {
+      contextString += `\nCustom Instructions:\n${currentSettings.customInstructions}\n`;
+    }
+
+    if (currentSettings.defaultRules.length > 0) {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (workspaceFolder) {
+        for (const rulePath of currentSettings.defaultRules) {
+          try {
+            const fileUri = vscode.Uri.joinPath(workspaceFolder, rulePath);
+            const fileContent = await vscode.workspace.fs.readFile(fileUri);
+            const textContent = new TextDecoder().decode(fileContent);
+            const truncated = textContent.length > 10240
+              ? textContent.slice(0, 10240) + '\n... (truncated, file too large)'
+              : textContent;
+            contextString += `\nDefault Rules [${rulePath}]:\n\`\`\`\n${truncated}\n\`\`\`\n`;
+          } catch (e) {
+            // File may have been deleted since settings were saved — skip silently
+          }
         }
       }
     }

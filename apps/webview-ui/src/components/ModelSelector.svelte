@@ -1,7 +1,7 @@
 <script lang="ts">
   import { vscode } from '../lib/vscode';
-  import { models, activeModel, showModelSelector } from '../lib/store';
-  import type { ModelInfo } from '../lib/types';
+  import { models, activeModel, showModelSelector, settings } from '../lib/store';
+  import type { ModelInfo, Settings } from '../lib/types';
 
   /** Group labels for owned_by categories */
   const GROUP_LABELS: Record<string, { label: string; icon: string }> = {
@@ -28,6 +28,8 @@
     activeModel.set(modelId);
     showModelSelector.set(false);
     vscode.postMessage({ type: 'setModel', value: { id: modelId } });
+    // Do NOT update settings.defaultModel here! 
+    // Changing model in current session should not override the global default model.
   }
 
   function handleBackdropClick() {

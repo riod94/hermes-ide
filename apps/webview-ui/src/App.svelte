@@ -6,11 +6,13 @@
   import WelcomeScreen from './components/WelcomeScreen.svelte';
   import SessionList from './components/SessionList.svelte';
   import ModelSelector from './components/ModelSelector.svelte';
+  import SettingsPanel from './components/SettingsPanel.svelte';
   import {
     messages, isLoading, updateMessage, clearMessages,
     sessions, activeSessionId, activeSessionTitle, showSessionList,
     models, activeModel, showModelSelector,
     attachments, editText, skills,
+    settings, showSettingsPanel, availableRuleFiles,
   } from './lib/store';
   import { vscode } from './lib/vscode';
   import type { IncomingMessage } from './lib/types';
@@ -47,13 +49,13 @@
     scrollToBottom();
   });
 
-  // Scroll during streaming if user is near bottom
+  // Scroll during streaming if user is near bottom (respects autoScroll setting)
   $effect(() => {
     const lastMsg = $messages[$messages.length - 1];
     if (lastMsg?.status === 'streaming' && lastMsg.content) {
       // Re-trigger on content change
       const _content = lastMsg.content;
-      if (isNearBottom()) {
+      if ($settings.autoScroll && isNearBottom()) {
         scrollToBottom();
       }
     }
@@ -115,6 +117,7 @@
         case 'modelChanged': {
           const chgMsg = msg as any;
           activeModel.set(chgMsg.model);
+          // Do not sync to settings.defaultModel here, as it overrides user preference
           break;
         }
         case 'skillsLoaded': {
@@ -169,6 +172,16 @@
           messages.update((msgs) => msgs.slice(0, rmMsg.fromIndex));
           break;
         }
+        case 'settingsLoaded': {
+          const setMsg = msg as any;
+          settings.set(setMsg.settings);
+          break;
+        }
+        case 'ruleFilesFound': {
+          const rfMsg = msg as any;
+          availableRuleFiles.set(rfMsg.files || []);
+          break;
+        }
       }
     }
     window.addEventListener('message', handleMessage);
@@ -195,8 +208,15 @@
   }
 </script>
 
-<div class="flex flex-col h-screen overflow-hidden" style="background: var(--color-bg);">
+<div class="flex flex-col h-screen overflow-hidden"
+     style="background: var(--color-bg); font-size: {$settings.fontSize}px;"
+     class:compact-mode={$settings.compactMode}>
   <DiffAlert {pendingDiffs} onResolved={handleDiffResolved} />
+  
+  <!-- Settings Panel (slide-in overlay) -->
+  {#if $showSettingsPanel}
+    <SettingsPanel />
+  {/if}
   
   <!-- Session List Panel (slide-in overlay) -->
   {#if $showSessionList}
