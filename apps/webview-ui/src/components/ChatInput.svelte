@@ -1,6 +1,6 @@
 <script lang="ts">
   import { vscode } from '../lib/vscode';
-  import { activeModel, showModelSelector, attachments, showMentionPopup, showSlashPopup, editText, isLoading } from '../lib/store';
+  import { activeModel, showModelSelector, attachments, showMentionPopup, showSlashPopup, editText, isLoading, settings } from '../lib/store';
   import type { ContextAttachment } from '../lib/types';
   import MentionPopup from './MentionPopup.svelte';
   import SlashCommandPopup from './SlashCommandPopup.svelte';
@@ -225,7 +225,10 @@
       return;
     }
 
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && $settings.sendOnEnter) {
+      e.preventDefault();
+      send();
+    } else if (e.key === 'Enter' && e.shiftKey && !$settings.sendOnEnter) {
       e.preventDefault();
       send();
     }
@@ -679,7 +682,7 @@
         onkeydown={handleKeydown}
         oninput={handleInput}
         onpaste={handlePaste}
-        data-placeholder="Ask Hermes something… (@ for context, / for commands)"
+        data-placeholder={$settings.sendOnEnter ? "Ask Hermes something… (@ for context, / for commands)" : "Ask Hermes something… (Shift+Enter to send)"}
         class="rich-input flex-1 rounded-lg px-3 py-2 text-[13px] leading-normal outline-none transition-colors"
         style="background: var(--color-input-bg);
                color: var(--color-input-fg);
@@ -771,6 +774,13 @@
     />
 
     <div class="flex items-center gap-1">
+      <!-- Rules badge (if default rules are set) -->
+      {#if $settings.defaultRules.length > 0}
+        <div class="rules-badge" title={`${$settings.defaultRules.length} default rule(s) attached to every message`}>
+          <span class="rules-badge-icon">📏</span>
+          <span class="rules-badge-count">{$settings.defaultRules.length}</span>
+        </div>
+      {/if}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="model-badge" onclick={toggleModelSelector} title="Switch model">
@@ -887,6 +897,28 @@
   .model-badge svg {
     color: var(--color-muted);
     flex-shrink: 0;
+  }
+
+  /* ── Rules badge ── */
+  .rules-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 7px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-btn-bg) 10%, transparent);
+    font-size: 11px;
+  }
+
+  .rules-badge-icon {
+    font-size: 10px;
+  }
+
+  .rules-badge-count {
+    font-size: 10px;
+    color: var(--color-muted);
+    font-weight: 500;
   }
 
   /* ── Attachment chips (bar above input) ── */

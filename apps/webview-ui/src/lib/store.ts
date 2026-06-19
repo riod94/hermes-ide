@@ -1,5 +1,6 @@
 import { writable, derived } from 'svelte/store';
-import type { ChatMessage, SessionMeta, ModelInfo, ContextAttachment, SkillInfo } from './types';
+import type { ChatMessage, SessionMeta, ModelInfo, ContextAttachment, SkillInfo, Settings, RuleFileInfo } from './types';
+import { DEFAULT_SETTINGS } from './types';
 
 /** All chat messages */
 export const messages = writable<ChatMessage[]>([]);
@@ -54,6 +55,17 @@ export const skills = writable<SkillInfo[]>([]);
 
 /** Pre-filled text for input (from unsend/edit) */
 export const editText = writable<string>('');
+
+// ───────────────── Settings State ─────────────────
+
+/** User settings (persisted to globalState via Extension Host) */
+export const settings = writable<Settings>({ ...DEFAULT_SETTINGS });
+
+/** Whether settings panel is visible */
+export const showSettingsPanel = writable(false);
+
+/** Available rule files in workspace (for settings UI) */
+export const availableRuleFiles = writable<RuleFileInfo[]>([]);
 
 // ───────────────── Message Helpers ─────────────────
 

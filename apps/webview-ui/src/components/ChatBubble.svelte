@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ChatMessage } from '../lib/types';
   import { vscode } from '../lib/vscode';
-  import { isLoading } from '../lib/store';
+  import { isLoading, settings } from '../lib/store';
   import MarkdownRenderer from './MarkdownRenderer.svelte';
   import CheckpointCard from './CheckpointCard.svelte';
   import ToolUseCard from './ToolUseCard.svelte';
@@ -328,7 +328,9 @@
 
     <!-- Timestamp + Status + Retry -->
     <div class="flex items-center gap-1.5 mt-0.5 px-1">
-      <span class="text-[10px]" style="color: var(--color-muted);">{timeStr}</span>
+      {#if $settings.showTimestamps}
+        <span class="text-[10px]" style="color: var(--color-muted);">{timeStr}</span>
+      {/if}
       {#if message.status === 'sending'}
         <span class="text-[10px]" style="color: var(--color-muted);">⏳</span>
       {:else if message.status === 'streaming'}

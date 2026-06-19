@@ -73,7 +73,10 @@ export type OutgoingMessage =
   | { type: 'unsendMessage'; messageId: string }
   | { type: 'showWarning'; value: string }
   | { type: 'checkpointAction'; action: 'approve' | 'revise'; checkpoint: number }
-  | { type: 'openLink'; value: string };
+  | { type: 'openLink'; value: string }
+  | { type: 'getSettings' }
+  | { type: 'updateSettings'; settings: Settings }
+  | { type: 'scanRuleFiles' };
 
 /** Pending diff proposal dari MCP Server */
 export interface PendingDiff {
@@ -89,6 +92,38 @@ export interface SkillInfo {
   description: string;
   category: string | null;
 }
+
+/** Rule file found in workspace */
+export interface RuleFileInfo {
+  name: string;
+  path: string;
+}
+
+/** User settings (persisted via globalState) */
+export interface Settings {
+  // Chat
+  fontSize: number;        // 11-18, default 13
+  sendOnEnter: boolean;    // default true
+  autoScroll: boolean;     // default true
+  showTimestamps: boolean; // default false
+  compactMode: boolean;    // default false
+  // Context
+  defaultRules: string[];  // relative paths of auto-attached rule files
+  customInstructions: string; // always-injected custom instructions
+  // Model
+  defaultModel: string;    // default 'hermes-agent'
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  fontSize: 13,
+  sendOnEnter: true,
+  autoScroll: true,
+  showTimestamps: false,
+  compactMode: false,
+  defaultRules: [],
+  customInstructions: '',
+  defaultModel: 'hermes-agent',
+};
 
 /** Message types sent from extension to webview */
 export type IncomingMessage =
@@ -107,4 +142,6 @@ export type IncomingMessage =
   | { type: 'folderFilesAdded'; folderName: string; folderPath: string; files: { name: string; path: string }[] }
   | { type: 'clearLastError' }
   | { type: 'populateInput'; text: string; attachments?: ContextAttachment[] }
-  | { type: 'removeMessages'; fromIndex: number };
+  | { type: 'removeMessages'; fromIndex: number }
+  | { type: 'settingsLoaded'; settings: Settings }
+  | { type: 'ruleFilesFound'; files: RuleFileInfo[] };
