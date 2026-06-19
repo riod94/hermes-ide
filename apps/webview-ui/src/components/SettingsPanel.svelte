@@ -4,22 +4,20 @@
   import { DEFAULT_SETTINGS } from '../lib/types';
   import type { Settings } from '../lib/types';
 
-  // Local state mirroring store (for immediate UI reactivity)
-  let localSettings: Settings = $state({ ...DEFAULT_SETTINGS });
+  // Local state derived from store — always reactive
+  let localSettings: Settings = $derived({ ...$settings });
 
-  // Sync from store when panel opens
+  // Scan rule files when panel opens
   $effect(() => {
     if ($showSettingsPanel) {
-      settings.subscribe((s) => (localSettings = { ...s }))();
-      // Ask extension to scan for rule files
       vscode.postMessage({ type: 'scanRuleFiles' });
     }
   });
 
   function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
-    localSettings = { ...localSettings, [key]: value };
-    settings.set({ ...localSettings });
-    vscode.postMessage({ type: 'updateSettings', settings: { ...localSettings } });
+    const updated = { ...localSettings, [key]: value };
+    settings.set(updated);
+    vscode.postMessage({ type: 'updateSettings', settings: updated });
   }
 
   function handleFontSize(e: Event) {
@@ -48,10 +46,12 @@
   function handleDefaultModel(e: Event) {
     const val = (e.target as HTMLSelectElement).value;
     updateSetting('defaultModel', val);
+    // Sync model switcher immediately
+    activeModel.set(val);
+    vscode.postMessage({ type: 'setModel', value: { id: val } });
   }
 
   function resetToDefaults() {
-    localSettings = { ...DEFAULT_SETTINGS };
     settings.set({ ...DEFAULT_SETTINGS });
     vscode.postMessage({ type: 'updateSettings', settings: { ...DEFAULT_SETTINGS } });
   }

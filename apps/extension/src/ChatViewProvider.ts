@@ -414,9 +414,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   /** Update settings in globalState */
   private async _handleUpdateSettings(newSettings: Record<string, unknown>) {
-    const merged = { ...ChatViewProvider.DEFAULT_SETTINGS, ...newSettings };
+    const saved = this._context.globalState.get<Record<string, unknown>>('hermes.settings');
+    const merged = { ...ChatViewProvider.DEFAULT_SETTINGS, ...saved, ...newSettings };
     await this._context.globalState.update('hermes.settings', merged);
     this.postMessage({ type: 'settingsLoaded', settings: merged });
+
+    // Sync defaultModel → activeModel so the model switcher stays in sync
+    if (typeof merged.defaultModel === 'string') {
+      const currentActive = this._context.globalState.get<string>('hermes.activeModel');
+      if (currentActive !== merged.defaultModel) {
+        await this._handleSetModel({ id: merged.defaultModel });
+      }
+    }
   }
 
   /** Scan workspace for known rule/guidelines files */

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { vscode } from '../lib/vscode';
-  import { models, activeModel, showModelSelector } from '../lib/store';
-  import type { ModelInfo } from '../lib/types';
+  import { models, activeModel, showModelSelector, settings } from '../lib/store';
+  import type { ModelInfo, Settings } from '../lib/types';
 
   /** Group labels for owned_by categories */
   const GROUP_LABELS: Record<string, { label: string; icon: string }> = {
@@ -28,6 +28,9 @@
     activeModel.set(modelId);
     showModelSelector.set(false);
     vscode.postMessage({ type: 'setModel', value: { id: modelId } });
+    // Keep settings.defaultModel in sync
+    settings.update((s: Settings) => ({ ...s, defaultModel: modelId }));
+    vscode.postMessage({ type: 'updateSettings', settings: { defaultModel: modelId } });
   }
 
   function handleBackdropClick() {
