@@ -34,6 +34,17 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push({ dispose: () => mcpBridge.stop() });
 
+  // Register command for MCP Bridge to push diff proposals to webview (used by mcpBridge.onDiff)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hermes.showDiffControls', (payload: {
+      diffId: string;
+      filepath: string;
+      new_content: string;
+    }) => {
+      provider.showDiffControls(payload);
+    })
+  );
+
   // Register command for webview to resolve diffs
   context.subscriptions.push(
     vscode.commands.registerCommand('hermes.resolveDiff', (diffId: string, decision: 'accept' | 'reject') => {

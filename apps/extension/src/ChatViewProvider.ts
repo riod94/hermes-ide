@@ -173,15 +173,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // Register command handler to receive events from MCP Bridge
-    vscode.commands.registerCommand('hermes.showDiffControls', (payload: {
-      diffId: string;
-      filepath: string;
-      new_content: string;
-    }) => {
-      this._showDiffInWebview(payload);
-    });
-
     // Register "Add Selection to Chat" command (Ctrl+L / Cmd+L)
     vscode.commands.registerCommand('hermes.addToChat', async () => {
       await this._handleAddToChat();
@@ -191,6 +182,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Send a message to the webview */
   public postMessage(message: unknown) {
     this._view?.webview.postMessage(message);
+  }
+
+  /** Public bridge entrypoint for diff proposals registered during extension activation. */
+  public showDiffControls(payload: { diffId: string; filepath: string; new_content: string }) {
+    this._showDiffInWebview(payload);
   }
 
   // ───────────────── Session Management ─────────────────
