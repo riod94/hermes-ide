@@ -227,7 +227,7 @@
 </script>
 
 <div class="flex w-full mb-3 {isUser ? 'justify-end' : 'justify-start'}">
-  <div class="max-w-[85%] flex flex-col {isUser ? 'items-end' : 'items-start'}">
+  <div class="{isUser ? 'max-w-[85%]' : 'max-w-full w-full'} min-w-0 flex flex-col {isUser ? 'items-end' : 'items-start'}">
     <!-- Avatar + Name -->
     <div class="flex items-center gap-1.5 mb-1 px-1">
       {#if !isUser}
@@ -355,6 +355,9 @@
   /* ── Assistant bubble container ── */
   .assistant-bubble {
     overflow: hidden;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   /* ── Attachment chips in bubble ── */

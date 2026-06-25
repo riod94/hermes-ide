@@ -228,7 +228,7 @@
 
   <!-- Messages Area -->
   <div bind:this={chatContainerEl}
-       class="flex-1 overflow-y-auto px-3 py-3">
+       class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
     {#if $messages.length === 0 && !$isLoading}
       <WelcomeScreen />
     {:else}

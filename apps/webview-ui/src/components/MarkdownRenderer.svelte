@@ -146,7 +146,9 @@
     font-size: 13px;
     line-height: 1.6;
     word-wrap: break-word;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    min-width: 0;
   }
 
   /* ── Headings ── */
@@ -202,6 +204,7 @@
     font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
     font-size: 0.9em;
     color: var(--color-accent);
+    word-break: break-all;
   }
 
   /* ── Code blocks ── */
@@ -288,6 +291,7 @@
     margin: 8px 0;
     border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.08);
+    max-width: 100%;
   }
   .md-content :global(.md-table) {
     width: 100%;
@@ -317,6 +321,7 @@
     text-decoration: none;
     border-bottom: 1px solid transparent;
     transition: border-color 0.15s;
+    word-break: break-all;
   }
   .md-content :global(.md-link:hover) {
     border-bottom-color: var(--color-accent);
