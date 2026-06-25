@@ -64,11 +64,13 @@ export function generateDockerCompose(store: ProfileStore): string {
       - HERMES_UPSTREAM_KEY=sk-12bcf7a9e2757678-dqt8lc-eb063c2d
       - MCP_SERVICE_URL=http://host.docker.internal:${mcpPort}
       - HOST_PROJECTS_BASE=/home/ade/projects/${profile.name}
+      - GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=accept-new
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - /home/ade/projects/${profile.name}:/projects
       - ./config-${profile.name}:/config
+      - /home/ade/.ssh:/config/.ssh:ro
     ports:
       - "${profile.port}:8443"
     networks:

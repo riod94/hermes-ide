@@ -12,3 +12,13 @@ bun.lock
 .git/**
 apps/code-server-infra/**
 dist/mcpStandalone.ts
+apps/webview-ui/**
+apps/mcp-service/**
+apps/auth-portal/**
+.bun/**
+**/.bun/**
+*.vsix
+*.tgz
+PRD.md
+AGENTS.md
+**/fast-deep-equal/**
