@@ -23,6 +23,16 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Early-register hermes.showDiffControls to avoid "command not found" race
+  // when MCP bridge delivers a diff payload before the webview view is resolved.
+  // The real handler is registered inside ChatViewProvider.resolveWebviewView;
+  // this early no-op lets executeCommand succeed silently until then.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hermes.showDiffControls', () => {
+      // No-op fallback — replaced by ChatViewProvider once webview is resolved.
+    })
+  );
+
   // Start MCP Bridge — connects to standalone MCP Service via HTTP+SSE
   mcpBridge.onDiff((payload) => {
     // Forward diff proposals to webview
