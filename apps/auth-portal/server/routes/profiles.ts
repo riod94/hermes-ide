@@ -35,6 +35,71 @@ export async function handleProfileNames(_req: Request): Promise<Response> {
   return Response.json({ names });
 }
 
+/** GET /api/profiles/me — authenticated user's own profile */
+export async function handleProfileMe(req: Request): Promise<Response> {
+  const session = authenticate(req);
+  if (!session.authorized) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const store = loadStore();
+  const profile = store.profiles.find((p) => p.name === session.name);
+  if (!profile) {
+    return Response.json({ error: "Profile not found" }, { status: 404 });
+  }
+
+  return Response.json({
+    profile: { name: profile.name, role: profile.role, port: profile.port },
+  });
+}
+
+/** PUT /api/profiles/me/password — self-service password change */
+export async function handleChangeMyPassword(req: Request): Promise<Response> {
+  if (req.method !== "PUT") {
+    return Response.json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  const session = authenticate(req);
+  if (!session.authorized) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json() as { oldPassword: string; newPassword: string };
+    const { oldPassword, newPassword } = body;
+
+    if (!oldPassword || !newPassword) {
+      return Response.json({ error: "Old password and new password required" }, { status: 400 });
+    }
+
+    if (newPassword.length < 6) {
+      return Response.json({ error: "New password must be at least 6 characters" }, { status: 400 });
+    }
+
+    let store = loadStore();
+    const profile = store.profiles.find((p) => p.name === session.name);
+    if (!profile) {
+      return Response.json({ error: "Profile not found" }, { status: 404 });
+    }
+
+    if (profile.password !== oldPassword) {
+      return Response.json({ error: "Old password is incorrect" }, { status: 403 });
+    }
+
+    store = updatePassword(store, session.name!, newPassword);
+    saveStore(store);
+
+    writeDockerCompose(store);
+    await restartContainer(`hermes-ide-${session.name!.toLowerCase()}`);
+
+    await sendDiscordNotification(`🔑 **Hermes IDE Password Changed (self-service)**\n👤 User: \`${session.name}\`\n🔄 Container \`hermes-ide-${session.name!.toLowerCase()}\` has been restarted.`);
+
+    return Response.json({ success: true, message: "Password updated successfully" });
+  } catch (e: any) {
+    return Response.json({ error: e.message || "Bad request" }, { status: 400 });
+  }
+}
+
 export async function handleProfiles(req: Request): Promise<Response> {
   const session = authenticate(req);
   if (!session.authorized || !isAdmin(session.role!)) {

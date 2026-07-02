@@ -33,17 +33,9 @@
           sessionRole = result.profile.role;
           sessionPort = result.profile.port;
           sessionPassword = session.password;
-
-          if (sessionRole === "admin") {
-            loggedIn = true;
-            checkingSession = false;
-            return;
-          } else {
-            // Developer — redirect via proxy login (sets code-server session cookie)
-            const token = btoa(`${session.name}:${session.password}`);
-            window.location.href = `${window.location.origin}/api/open-ide?name=${encodeURIComponent(session.name)}&token=${encodeURIComponent(token)}`;
-            return;
-          }
+          loggedIn = true;
+          checkingSession = false;
+          return;
         }
       } catch {
         // Session invalid, clear
@@ -91,12 +83,8 @@
           password: sessionPassword,
         }));
 
-        if (sessionRole === "admin") {
+        if (sessionRole === "admin" || sessionRole === "developer") {
           loggedIn = true;
-        } else {
-          // Developer → proxy login to code-server (auto-bypass password)
-          const token = btoa(`${sessionName}:${sessionPassword}`);
-          window.location.href = `${window.location.origin}/api/open-ide?name=${encodeURIComponent(sessionName)}&token=${encodeURIComponent(token)}`;
         }
       } else {
         errorMsg = result.error || "Login gagal";
@@ -135,10 +123,11 @@
       <p class="text-zinc-400 text-sm">Checking session...</p>
     </div>
   </main>
-{:else if loggedIn && sessionRole === "admin"}
+{:else if loggedIn}
   <Dashboard
-    adminName={sessionName}
-    adminPassword={sessionPassword}
+    userName={sessionName}
+    userPassword={sessionPassword}
+    userRole={sessionRole}
     on:logout={handleLogout}
   />
 {:else}
@@ -230,7 +219,8 @@
         </div>
 
         <!-- Footer -->
-        <div class="mt-6 text-center">
+        <div class="mt-6 text-center space-y-2">
+          <p class="text-xs text-zinc-500">Lupa password? Hubungi admin untuk reset.</p>
           <p class="text-xs text-zinc-600">Hermes IDE Extension · Nusawork</p>
         </div>
       </div>

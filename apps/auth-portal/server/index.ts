@@ -1,6 +1,6 @@
 import { join } from "path";
 import { handleAuth } from "./routes/auth";
-import { handleProfiles, handleProfileNames } from "./routes/profiles";
+import { handleProfiles, handleProfileNames, handleProfileMe, handleChangeMyPassword } from "./routes/profiles";
 import { handleDeploy } from "./routes/deploy";
 import { handleOpenIDE } from "./routes/open-ide";
 import { handleChat } from "./routes/chat";
@@ -82,6 +82,18 @@ const server = Bun.serve({
 
     if (pathname === "/api/profile-names") {
       const res = await handleProfileNames(req);
+      res.headers.set("Access-Control-Allow-Origin", "*");
+      return res;
+    }
+
+    if (pathname === "/api/profiles/me/password") {
+      const res = await handleChangeMyPassword(req);
+      res.headers.set("Access-Control-Allow-Origin", "*");
+      return res;
+    }
+
+    if (pathname === "/api/profiles/me") {
+      const res = await handleProfileMe(req);
       res.headers.set("Access-Control-Allow-Origin", "*");
       return res;
     }

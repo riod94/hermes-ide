@@ -74,3 +74,19 @@ export async function deploy(adminName: string, adminPass: string) {
   });
   return res.json();
 }
+
+export async function getMyProfile(name: string, password: string): Promise<{ profile: ProfileInfo }> {
+  const res = await fetch(`${API_BASE}/api/profiles/me`, {
+    headers: authHeader(name, password),
+  });
+  return res.json();
+}
+
+export async function changeMyPassword(name: string, currentPassword: string, oldPassword: string, newPassword: string) {
+  const res = await fetch(`${API_BASE}/api/profiles/me/password`, {
+    method: "PUT",
+    headers: authHeader(name, currentPassword),
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+  return res.json();
+}

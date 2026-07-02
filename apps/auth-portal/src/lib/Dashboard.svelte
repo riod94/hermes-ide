@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
-  import { listProfiles, addProfile, updateProfilePassword, updateProfileRole, removeProfile, deploy, type ProfileInfo } from './api';
+  import { listProfiles, addProfile, updateProfilePassword, updateProfileRole, removeProfile, deploy, getMyProfile, changeMyPassword, type ProfileInfo } from './api';
 
-  export let adminName: string;
-  export let adminPassword: string;
+  export let userName: string;
+  export let userPassword: string;
+  export let userRole: string;
 
   const dispatch = createEventDispatcher();
+
+  $: isAdmin = userRole === "admin";
 
   let profiles: ProfileInfo[] = [];
   let loading = false;
@@ -19,9 +22,15 @@
   let newPassword = "";
   let newRole = "developer";
 
-  // Edit password modal
+  // Edit password modal (admin editing others)
   let editingProfile: string | null = null;
   let editPassword = "";
+
+  // Change own password modal
+  let showChangePassword = false;
+  let oldPassword = "";
+  let newOwnPassword = "";
+  let confirmPassword = "";
 
   // Delete confirm
   let deletingProfile: string | null = null;
@@ -35,8 +44,13 @@
   async function fetchProfiles() {
     loading = true;
     try {
-      const data = await listProfiles(adminName, adminPassword);
-      profiles = data.profiles || [];
+      if (isAdmin) {
+        const data = await listProfiles(userName, userPassword);
+        profiles = data.profiles || [];
+      } else {
+        const data = await getMyProfile(userName, userPassword);
+        profiles = data.profile ? [data.profile] : [];
+      }
     } catch (e) {
       showMessage("Gagal memuat profil", "error");
     } finally {
@@ -50,7 +64,7 @@
       return;
     }
     try {
-      const result = await addProfile(adminName, adminPassword, newName, newPassword, newRole);
+      const result = await addProfile(userName, userPassword, newName, newPassword, newRole);
       if (result.success) {
         showMessage(`Profil '${newName}' berhasil ditambahkan`, "success");
         newName = "";
@@ -69,7 +83,7 @@
   async function handleUpdatePassword() {
     if (!editingProfile || !editPassword) return;
     try {
-      const result = await updateProfilePassword(adminName, adminPassword, editingProfile, editPassword);
+      const result = await updateProfilePassword(userName, userPassword, editingProfile, editPassword);
       if (result.success) {
         showMessage(`Password '${editingProfile}' berhasil diubah`, "success");
         editingProfile = null;
@@ -82,10 +96,45 @@
     }
   }
 
+  async function handleChangeOwnPassword() {
+    if (!oldPassword || !newOwnPassword) {
+      showMessage("Semua field wajib diisi", "error");
+      return;
+    }
+    if (newOwnPassword !== confirmPassword) {
+      showMessage("Password baru tidak cocok dengan konfirmasi", "error");
+      return;
+    }
+    if (newOwnPassword.length < 6) {
+      showMessage("Password baru minimal 6 karakter", "error");
+      return;
+    }
+    try {
+      const result = await changeMyPassword(userName, userPassword, oldPassword, newOwnPassword);
+      if (result.success) {
+        // Update stored password for current session
+        userPassword = newOwnPassword;
+        localStorage.setItem("hermes-ide-session", JSON.stringify({
+          name: userName,
+          password: newOwnPassword,
+        }));
+        showMessage("Password berhasil diubah", "success");
+        showChangePassword = false;
+        oldPassword = "";
+        newOwnPassword = "";
+        confirmPassword = "";
+      } else {
+        showMessage(result.error || "Gagal mengubah password", "error");
+      }
+    } catch (e) {
+      showMessage("Gagal mengubah password", "error");
+    }
+  }
+
   async function handleUpdateRole() {
     if (!editingRoleProfile || !editRole) return;
     try {
-      const result = await updateProfileRole(adminName, adminPassword, editingRoleProfile, editRole);
+      const result = await updateProfileRole(userName, userPassword, editingRoleProfile, editRole);
       if (result.success) {
         showMessage(`Role '${editingRoleProfile}' diubah menjadi '${editRole}'`, "success");
         editingRoleProfile = null;
@@ -102,7 +151,7 @@
   async function handleDelete() {
     if (!deletingProfile) return;
     try {
-      const result = await removeProfile(adminName, adminPassword, deletingProfile);
+      const result = await removeProfile(userName, userPassword, deletingProfile);
       if (result.success) {
         showMessage(`Profil '${deletingProfile}' berhasil dihapus`, "success");
         deletingProfile = null;
@@ -118,7 +167,7 @@
   async function handleDeploy() {
     deployLoading = true;
     try {
-      const result = await deploy(adminName, adminPassword);
+      const result = await deploy(userName, userPassword);
       if (result.success) {
         showMessage("Docker Compose di-generate & container di-restart ✅", "success");
       } else {
@@ -138,8 +187,7 @@
   }
 
   function openIDE(profileName: string) {
-    // Encode admin credentials as base64 token
-    const token = btoa(`${adminName}:${adminPassword}`);
+    const token = btoa(`${userName}:${userPassword}`);
     const url = `${window.location.origin}/api/open-ide?name=${encodeURIComponent(profileName)}&token=${encodeURIComponent(token)}`;
     window.open(url, "_blank");
   }
@@ -148,34 +196,20 @@
     return name.charAt(0).toUpperCase();
   }
 
-  // Color palette for profile avatars
   const avatarColors: Record<string, string> = {
-    a: "from-rose-500 to-pink-600",
-    b: "from-orange-500 to-amber-600",
-    c: "from-amber-500 to-yellow-600",
-    d: "from-emerald-500 to-green-600",
-    e: "from-teal-500 to-cyan-600",
-    f: "from-cyan-500 to-blue-600",
-    g: "from-blue-500 to-indigo-600",
-    h: "from-indigo-500 to-violet-600",
-    i: "from-violet-500 to-purple-600",
-    j: "from-purple-500 to-fuchsia-600",
-    k: "from-fuchsia-500 to-pink-600",
-    l: "from-rose-400 to-red-600",
-    m: "from-sky-500 to-blue-600",
-    n: "from-lime-500 to-green-600",
-    o: "from-orange-400 to-red-500",
-    p: "from-pink-500 to-rose-600",
-    q: "from-teal-400 to-emerald-600",
-    r: "from-blue-400 to-indigo-600",
-    s: "from-violet-400 to-purple-600",
-    t: "from-amber-400 to-orange-600",
-    u: "from-cyan-400 to-teal-600",
-    v: "from-indigo-400 to-blue-600",
-    w: "from-green-400 to-emerald-600",
-    x: "from-red-400 to-rose-600",
-    y: "from-yellow-400 to-amber-600",
-    z: "from-purple-400 to-violet-600",
+    a: "from-rose-500 to-pink-600", b: "from-orange-500 to-amber-600",
+    c: "from-amber-500 to-yellow-600", d: "from-emerald-500 to-green-600",
+    e: "from-teal-500 to-cyan-600", f: "from-cyan-500 to-blue-600",
+    g: "from-blue-500 to-indigo-600", h: "from-indigo-500 to-violet-600",
+    i: "from-violet-500 to-purple-600", j: "from-purple-500 to-fuchsia-600",
+    k: "from-fuchsia-500 to-pink-600", l: "from-rose-400 to-red-600",
+    m: "from-sky-500 to-blue-600", n: "from-lime-500 to-green-600",
+    o: "from-orange-400 to-red-500", p: "from-pink-500 to-rose-600",
+    q: "from-teal-400 to-emerald-600", r: "from-blue-400 to-indigo-600",
+    s: "from-violet-400 to-purple-600", t: "from-amber-400 to-orange-600",
+    u: "from-cyan-400 to-teal-600", v: "from-indigo-400 to-blue-600",
+    w: "from-green-400 to-emerald-600", x: "from-red-400 to-rose-600",
+    y: "from-yellow-400 to-amber-600", z: "from-purple-400 to-violet-600",
   };
 
   function getAvatarColor(name: string): string {
@@ -201,14 +235,23 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-white tracking-tight">Hermes IDE</h1>
-          <p class="text-xs text-zinc-500">Admin Dashboard</p>
+          <p class="text-xs text-zinc-500">{isAdmin ? 'Admin Dashboard' : 'My Workspace'}</p>
         </div>
       </div>
       
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3">
+        <button
+          on:click={() => { showChangePassword = true; oldPassword = ""; newOwnPassword = ""; confirmPassword = ""; }}
+          class="px-3 py-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-all flex items-center gap-1.5"
+          title="Ubah password"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          Change Password
+        </button>
         <div class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/50 rounded-full border border-zinc-700/50">
-          <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-          <span class="text-xs text-zinc-300 font-medium">{adminName}</span>
+          <div class="w-2 h-2 rounded-full {isAdmin ? 'bg-blue-400' : 'bg-emerald-400'} animate-pulse"></div>
+          <span class="text-xs text-zinc-300 font-medium">{userName}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full {isAdmin ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}">{userRole}</span>
         </div>
         <button
           on:click={() => dispatch('logout')}
@@ -234,55 +277,59 @@
       </div>
     {/if}
 
-    <!-- Stats Bar -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-      <div class="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
-        <p class="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total Profiles</p>
-        <p class="text-2xl font-bold text-white">{profiles.length}</p>
+    <!-- Stats Bar (admin only) -->
+    {#if isAdmin}
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
+          <p class="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total Profiles</p>
+          <p class="text-2xl font-bold text-white">{profiles.length}</p>
+        </div>
+        <div class="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
+          <p class="text-xs text-zinc-500 uppercase tracking-wider mb-1">Admins</p>
+          <p class="text-2xl font-bold text-blue-400">{profiles.filter(p => p.role === 'admin').length}</p>
+        </div>
+        <div class="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
+          <p class="text-xs text-zinc-500 uppercase tracking-wider mb-1">Developers</p>
+          <p class="text-2xl font-bold text-emerald-400">{profiles.filter(p => p.role === 'developer').length}</p>
+        </div>
+        <div class="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
+          <p class="text-xs text-zinc-500 uppercase tracking-wider mb-1">Port Range</p>
+          <p class="text-2xl font-bold text-amber-400 font-mono">51001-{51000 + profiles.length}</p>
+        </div>
       </div>
-      <div class="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
-        <p class="text-xs text-zinc-500 uppercase tracking-wider mb-1">Admins</p>
-        <p class="text-2xl font-bold text-blue-400">{profiles.filter(p => p.role === 'admin').length}</p>
-      </div>
-      <div class="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
-        <p class="text-xs text-zinc-500 uppercase tracking-wider mb-1">Developers</p>
-        <p class="text-2xl font-bold text-emerald-400">{profiles.filter(p => p.role === 'developer').length}</p>
-      </div>
-      <div class="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
-        <p class="text-xs text-zinc-500 uppercase tracking-wider mb-1">Port Range</p>
-        <p class="text-2xl font-bold text-amber-400 font-mono">51001-{51000 + profiles.length}</p>
-      </div>
-    </div>
+    {/if}
 
     <!-- Action Bar -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-bold text-white">Workspaces</h2>
-      <div class="flex items-center gap-3">
-        <button
-          on:click={() => { showAddForm = !showAddForm; }}
-          class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 flex items-center gap-2"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          Add Profile
-        </button>
-        <button
-          on:click={handleDeploy}
-          disabled={deployLoading}
-          class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {#if deployLoading}
-            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-            Deploying...
-          {:else}
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            Sync & Deploy
-          {/if}
-        </button>
-      </div>
+      <h2 class="text-xl font-bold text-white">{isAdmin ? 'Workspaces' : 'My Workspace'}</h2>
+      {#if isAdmin}
+        <div class="flex items-center gap-3">
+          <button
+            on:click={() => { showAddForm = !showAddForm; }}
+            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 flex items-center gap-2"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Add Profile
+          </button>
+          <button
+            on:click={handleDeploy}
+            disabled={deployLoading}
+            class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {#if deployLoading}
+              <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              Deploying...
+            {:else}
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Sync & Deploy
+            {/if}
+          </button>
+        </div>
+      {/if}
     </div>
 
-    <!-- Add Profile Form (Collapsible) -->
-    {#if showAddForm}
+    <!-- Add Profile Form (admin only, collapsible) -->
+    {#if isAdmin && showAddForm}
       <div class="mb-6 bg-zinc-900/80 border border-zinc-800/60 rounded-2xl p-6 backdrop-blur-sm">
         <h3 class="text-sm font-semibold text-zinc-300 mb-4 uppercase tracking-wider">New Profile</h3>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -342,7 +389,7 @@
         Loading profiles...
       </div>
     {:else}
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 {isAdmin ? 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'max-w-md'} gap-4">
         {#each profiles as profile}
           <div class="group relative bg-zinc-900/70 hover:bg-zinc-900/90 border border-zinc-800/60 hover:border-zinc-700/80 rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5">
             
@@ -361,34 +408,36 @@
                 </div>
               </div>
 
-              <!-- Kebab menu -->
-              <div class="relative">
-                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    on:click={() => { editingProfile = profile.name; editPassword = ""; }}
-                    class="p-1.5 text-zinc-500 hover:text-amber-400 hover:bg-zinc-800 rounded-lg transition-all"
-                    title="Ubah password"
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                  </button>
-                  {#if profile.name !== "default"}
+              <!-- Admin actions (kebab) -->
+              {#if isAdmin}
+                <div class="relative">
+                  <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      on:click={() => { editingRoleProfile = profile.name; editRole = profile.role; }}
-                      class="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-zinc-800 rounded-lg transition-all"
-                      title="Ubah role"
+                      on:click={() => { editingProfile = profile.name; editPassword = ""; }}
+                      class="p-1.5 text-zinc-500 hover:text-amber-400 hover:bg-zinc-800 rounded-lg transition-all"
+                      title="Ubah password"
                     >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                     </button>
-                    <button
-                      on:click={() => { deletingProfile = profile.name; }}
-                      class="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-all"
-                      title="Hapus profil"
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    </button>
-                  {/if}
+                    {#if profile.name !== "default"}
+                      <button
+                        on:click={() => { editingRoleProfile = profile.name; editRole = profile.role; }}
+                        class="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-zinc-800 rounded-lg transition-all"
+                        title="Ubah role"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                      </button>
+                      <button
+                        on:click={() => { deletingProfile = profile.name; }}
+                        class="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-all"
+                        title="Hapus profil"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                      </button>
+                    {/if}
+                  </div>
                 </div>
-              </div>
+              {/if}
             </div>
 
             <!-- Port badge -->
@@ -420,7 +469,7 @@
     </div>
   </div>
 
-  <!-- Edit Password Modal -->
+  <!-- Edit Password Modal (admin editing others) -->
   {#if editingProfile}
     <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div class="bg-zinc-900 border border-zinc-700/60 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
@@ -429,7 +478,7 @@
             <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
           </div>
           <div>
-            <h3 class="text-base font-bold text-zinc-100">Change Password</h3>
+            <h3 class="text-base font-bold text-zinc-100">Reset Password</h3>
             <p class="text-xs text-zinc-500">{editingProfile}</p>
           </div>
         </div>
@@ -457,7 +506,58 @@
     </div>
   {/if}
 
-  <!-- Delete Confirm Modal -->
+  <!-- Change Own Password Modal -->
+  {#if showChangePassword}
+    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div class="bg-zinc-900 border border-zinc-700/60 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-zinc-100">Change Password</h3>
+            <p class="text-xs text-zinc-500">{userName}</p>
+          </div>
+        </div>
+        <div class="space-y-3 mb-5">
+          <input
+            type="password"
+            bind:value={oldPassword}
+            placeholder="Current password"
+            class="w-full bg-zinc-800/80 border border-zinc-700/60 text-zinc-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
+          />
+          <input
+            type="password"
+            bind:value={newOwnPassword}
+            placeholder="New password (min 6 chars)"
+            class="w-full bg-zinc-800/80 border border-zinc-700/60 text-zinc-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
+          />
+          <input
+            type="password"
+            bind:value={confirmPassword}
+            placeholder="Confirm new password"
+            class="w-full bg-zinc-800/80 border border-zinc-700/60 text-zinc-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
+          />
+        </div>
+        <div class="flex gap-3">
+          <button
+            on:click={handleChangeOwnPassword}
+            class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl text-sm transition-all shadow-lg shadow-blue-500/20"
+          >
+            Update Password
+          </button>
+          <button
+            on:click={() => { showChangePassword = false; }}
+            class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 font-medium rounded-xl text-sm transition-all"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Delete Confirm Modal (admin only) -->
   {#if deletingProfile}
     <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div class="bg-zinc-900 border border-zinc-700/60 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
@@ -492,7 +592,7 @@
     </div>
   {/if}
 
-  <!-- Edit Role Modal -->
+  <!-- Edit Role Modal (admin only) -->
   {#if editingRoleProfile}
     <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div class="bg-zinc-900 border border-zinc-700/60 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
