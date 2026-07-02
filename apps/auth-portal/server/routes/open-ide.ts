@@ -1,6 +1,8 @@
 import { loadStore, getProfile } from "../lib/store";
 import { getIdeUrl } from "../lib/docker";
 
+const IDE_DOMAIN = process.env.IDE_DOMAIN || "ide.dev.nusa.work";
+
 /**
  * Proxy login ke code-server — ambil session cookie, redirect browser user
  * 
@@ -55,12 +57,30 @@ export async function handleOpenIDE(req: Request): Promise<Response> {
   const codeServerInternal = `http://localhost:${targetProfile.port}`;
 
   try {
+    // Extract headers from client request to prevent session mismatch in code-server
+    const clientHeaders: Record<string, string> = {
+      "Content-Type": "application/x-www-form-urlencoded",
+    };
+    
+    const userAgent = req.headers.get("user-agent");
+    if (userAgent) {
+      clientHeaders["User-Agent"] = userAgent;
+    }
+    
+    const xForwardedFor = req.headers.get("x-forwarded-for");
+    if (xForwardedFor) {
+      clientHeaders["X-Forwarded-For"] = xForwardedFor;
+    }
+    
+    const xRealIp = req.headers.get("x-real-ip");
+    if (xRealIp) {
+      clientHeaders["X-Real-IP"] = xRealIp;
+    }
+
     // POST login to code-server (internal/localhost)
     const loginRes = await fetch(`${codeServerInternal}/login`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: clientHeaders,
       body: `password=${encodeURIComponent(targetProfile.password)}`,
       redirect: "manual", // Don't follow redirect, we need the Set-Cookie
     });
@@ -76,12 +96,12 @@ export async function handleOpenIDE(req: Request): Promise<Response> {
 
     // Cross-subdomain: Auth Portal (ide.app.dev.nusa.work) sets cookie for
     // code-server (ide-rio.app.dev.nusa.work). Both share parent domain .app.dev.nusa.work,
-    // so setting Domain=.app.dev.nusa.work makes the cookie available across subdomains.
+    // so setting Domain=.ide.dev.nusa.work makes the cookie available across subdomains.
     return new Response(null, {
       status: 302,
       headers: {
         "Location": codeServerUrl,
-        "Set-Cookie": `${cookieParts}; Path=/; Domain=.app.dev.nusa.work; SameSite=Lax; Secure`,
+        "Set-Cookie": `${cookieParts}; Path=/; Domain=.${IDE_DOMAIN}; SameSite=Lax; Secure`,
       },
     });
 

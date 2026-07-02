@@ -172,20 +172,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           break;
       }
     });
-
-    // Register command handler to receive events from MCP Bridge
-    vscode.commands.registerCommand('hermes.showDiffControls', (payload: {
-      diffId: string;
-      filepath: string;
-      new_content: string;
-    }) => {
-      this._showDiffInWebview(payload);
-    });
-
-    // Register "Add Selection to Chat" command (Ctrl+L / Cmd+L)
-    vscode.commands.registerCommand('hermes.addToChat', async () => {
-      await this._handleAddToChat();
-    });
   }
 
   /** Send a message to the webview */
@@ -487,7 +473,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // ───────────────── Diff Handling ─────────────────
 
   /** Send pending diff to Webview UI */
-  private _showDiffInWebview(payload: { diffId: string; filepath: string; new_content: string }) {
+  public showDiffInWebview(payload: { diffId: string; filepath: string; new_content: string }) {
     this.postMessage({
       type: 'showPendingDiff',
       diff: {
@@ -1165,7 +1151,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Add selected text from editor/terminal to chat input (Ctrl+Shift+L / Cmd+Shift+L) */
-  private async _handleAddToChat() {
+  public async handleAddToChat() {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       // Try terminal selection

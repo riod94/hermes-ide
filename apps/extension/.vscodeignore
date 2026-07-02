@@ -10,6 +10,11 @@ tsconfig.json
 esbuild.js
 bun.lock
 .git/**
+../../.git/**
+../**
+../../**
+../../.gitignore
+../../.gitattributes
 apps/code-server-infra/**
 dist/mcpStandalone.ts
 apps/webview-ui/**
