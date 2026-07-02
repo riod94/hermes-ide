@@ -196,19 +196,6 @@
     }
   }
 
-  // ── Self password modal (from navbar) ──
-  function openSelfPasswordModal() {
-    const selfProfile = profiles.find(p => p.name === userName);
-    if (selfProfile) {
-      modalProfile = selfProfile;
-    } else {
-      modalProfile = { name: userName, role: userRole, port: 0 };
-    }
-    modalMode = 'edit';
-    modalIsSelf = true;
-    modalShow = true;
-  }
-
   function openIDE(profileName: string) {
     const token = btoa(`${userName}:${userPassword}`);
     window.open(`${window.location.origin}/api/open-ide?name=${encodeURIComponent(profileName)}&token=${encodeURIComponent(token)}`, '_blank');
@@ -258,11 +245,7 @@
       </div>
 
       <div class="flex items-center gap-2 sm:gap-3">
-        <button on:click={openSelfPasswordModal}
-          class="p-2 sm:px-3 sm:py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-all flex items-center gap-1.5" title="Change Password">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-          <span class="hidden sm:inline text-xs">Password</span>
-        </button>
+
         <div class="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 bg-zinc-800/50 rounded-full border border-zinc-700/50">
           <div class="w-2 h-2 rounded-full {isAdmin ? 'bg-blue-400' : 'bg-emerald-400'} animate-pulse"></div>
           <span class="text-xs text-zinc-300 font-medium">{userName}</span>
